@@ -1,5 +1,5 @@
-import { Message } from "../models/Message";
-import { Chat } from "../models/Chat";
+import { Message } from "../models/Message.js";
+import { Chat } from "../models/Chat.js";
 
 export async function getMessages(req, res, next) {
   try {

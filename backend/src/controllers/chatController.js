@@ -1,4 +1,4 @@
-import { Chat } from "../models/Chat";
+import { Chat } from "../models/Chat.js";
 import { Types } from "mongoose";
 
 export async function getChats(req, res, next) {

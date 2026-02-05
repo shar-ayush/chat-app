@@ -186,7 +186,7 @@ const ChatDetailScreen = () => {
 
           {/* Input bar */}
           <View className="px-3 pb-3 pt-2 bg-surface border-t border-surface-light">
-            <View className="flex-row items-end bg-surface-card rounded-3xl px-3 py-1.5 gap-2">
+            <View className="flex-row items-center bg-surface-card rounded-3xl px-3 py-1.5 gap-2">
               <Pressable className="w-8 h-8 rounded-full items-center justify-center">
                 <Ionicons name="add" size={22} color="#F4A261" />
               </Pressable>

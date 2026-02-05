@@ -1,9 +1,9 @@
 import { create } from "zustand";
-// import { io, Socket } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
 import { QueryClient } from "@tanstack/react-query";
 import { Chat, Message, MessageSender } from "@/types";
 
-const SOCKET_URL = "https://whisper-ijeje.sevalla.app";
+const SOCKET_URL = "http://172.16.212.95:3000";
 
 interface SocketState {
   socket: Socket | null;

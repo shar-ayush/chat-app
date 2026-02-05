@@ -2,7 +2,7 @@ import axios from "axios";
 import { useAuth } from "@clerk/clerk-expo";
 import { useCallback } from "react";
 
-const API_URL = "http://172.16.213.122:3000/api";
+const API_URL = "http://172.16.212.95:3000/api";
 
 
 const api = axios.create({

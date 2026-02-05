@@ -11,6 +11,9 @@ const httpServer = createServer(app);
 
 initializeSocket(httpServer);
 
+app.get("/", (req, res) => {
+  res.send("Backend is running");
+});
 
 connectDB()
   .then(() => {

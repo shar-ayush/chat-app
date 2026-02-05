@@ -2,6 +2,7 @@ import app from "./src/app.js";
 import { connectDB } from "./src/config/database.js";
 import { createServer } from "http";
 import { initializeSocket } from "./src/utils/socket.js";
+import job from "./src/scripts/cron.js"
 
 import 'dotenv/config'
 
@@ -11,9 +12,7 @@ const httpServer = createServer(app);
 
 initializeSocket(httpServer);
 
-app.get("/", (req, res) => {
-  res.send("Backend is running");
-});
+job.start();
 
 connectDB()
   .then(() => {

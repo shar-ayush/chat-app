@@ -3,7 +3,7 @@ import { io, Socket } from "socket.io-client";
 import { QueryClient } from "@tanstack/react-query";
 import { Chat, Message, MessageSender } from "@/types";
 
-const SOCKET_URL = "http://172.16.212.95:3000";
+const SOCKET_URL = "https://chat-app-muyj.onrender.com";
 
 interface SocketState {
   socket: Socket | null;

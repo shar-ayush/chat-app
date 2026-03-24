@@ -1,11 +1,13 @@
 import { useApi } from "@/lib/axios";
 import type { Chat } from "@/types";
-import { decryptMessage } from "@/crypto/messageCrypto";
+import { decryptMessage, selectEncryptedPayloadForUser } from "@/crypto/messageCrypto";
+import { useCurrentUser } from "./useAuth";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export const useChats = () => {
   const { apiWithAuth } = useApi();
+  const { data: currentUser } = useCurrentUser();
 
   return useQuery({
     queryKey: ["chats"],
@@ -14,11 +16,15 @@ export const useChats = () => {
       
       return Promise.all(
         data.map(async (chat) => {
-          if (chat.lastMessage?.ciphertext && chat.lastMessage?.nonce && chat.lastMessage?.senderPublicKey) {
+          const payload = chat.lastMessage
+            ? selectEncryptedPayloadForUser(chat.lastMessage, currentUser?._id)
+            : null;
+
+          if (payload && chat.lastMessage?.senderPublicKey) {
             try {
               const plaintext = await decryptMessage({
-                ciphertext: chat.lastMessage.ciphertext,
-                nonce: chat.lastMessage.nonce,
+                ciphertext: payload.ciphertext,
+                nonce: payload.nonce,
                 senderPublicKey: chat.lastMessage.senderPublicKey,
               });
               return { ...chat, lastMessage: { ...chat.lastMessage, text: plaintext } as typeof chat.lastMessage };
@@ -36,6 +42,7 @@ export const useChats = () => {
 export const useGetOrCreateChat = () => {
   const { apiWithAuth } = useApi();
   const queryClient = useQueryClient();
+  const { data: currentUser } = useCurrentUser();
 
   return useMutation({
     mutationFn: async (participantId: string): Promise<Chat> => {
@@ -45,11 +52,15 @@ export const useGetOrCreateChat = () => {
       });
       
       let chat = data;
-      if (chat.lastMessage?.ciphertext && chat.lastMessage?.nonce && chat.lastMessage?.senderPublicKey) {
+      const payload = chat.lastMessage
+        ? selectEncryptedPayloadForUser(chat.lastMessage, currentUser?._id)
+        : null;
+
+      if (payload && chat.lastMessage?.senderPublicKey) {
         try {
           const plaintext = await decryptMessage({
-            ciphertext: chat.lastMessage.ciphertext,
-            nonce: chat.lastMessage.nonce,
+            ciphertext: payload.ciphertext,
+            nonce: payload.nonce,
             senderPublicKey: chat.lastMessage.senderPublicKey,
           });
           chat = { ...chat, lastMessage: { ...chat.lastMessage, text: plaintext } as typeof chat.lastMessage };

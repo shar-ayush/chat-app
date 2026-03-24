@@ -29,6 +29,9 @@ export interface ChatLastMessage {
   _id: string;
   text: string;
   sender: string;
+  ciphertext?: string;
+  nonce?: string;
+  senderPublicKey?: string;
   createdAt: string;
 }
 

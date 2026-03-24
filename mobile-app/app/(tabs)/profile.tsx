@@ -48,7 +48,7 @@ const ProfileTab = () => {
           <View className="relative">
             <View className="rounded-full border-2 border-primary">
               <Image
-                source={user?.imageUrl}
+                source={{ uri: user?.imageUrl }}
                 style={{ width: 100, height: 100, borderRadius: 999 }}
               />
             </View>

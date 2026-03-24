@@ -19,6 +19,8 @@ const MessageSchema = new Schema(
     },
     ciphertext: { type: String, default: null }, // base64
     nonce: { type: String, default: null }, // base64
+    senderCiphertext: { type: String, default: null }, // base64 (sender copy)
+    senderNonce: { type: String, default: null }, // base64 (sender copy)
     senderPublicKey: { type: String, default: null }, // base64
     createdAt: { type: Date, default: Date.now },
     readBy: [String],

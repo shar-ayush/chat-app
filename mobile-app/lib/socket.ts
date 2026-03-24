@@ -1,11 +1,11 @@
 import { create } from "zustand";
 import { io, Socket } from "socket.io-client";
 import { QueryClient } from "@tanstack/react-query";
-import { Chat, Message, MessageSender } from "@/types";
-import { encryptMessage, decryptMessage } from "@/crypto/messageCrypto";
+import { Chat, Message, MessageSender, User } from "@/types";
+import { encryptMessage, decryptMessage, selectEncryptedPayloadForUser } from "@/crypto/messageCrypto";
 
 // const SOCKET_URL = "https://chat-app-muyj.onrender.com";
-const SOCKET_URL = "http://172.16.212.199:3000";
+const SOCKET_URL = "http://172.16.213.18:3000";
 
 interface SocketState {
   socket: Socket | null;
@@ -77,14 +77,16 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     socket.on("new-message", async (message: Message) => {
       const senderId = (message.sender as MessageSender)._id;
       const { currentChatId } = get();
+      const currentUser = queryClient.getQueryData<User>(["currentUser"]);
 
       // Decrypt the message if it has an encrypted payload
       let displayMessage = message;
-      if (message.ciphertext && message.nonce && message.senderPublicKey) {
+      const payload = selectEncryptedPayloadForUser(message, currentUser?._id);
+      if (payload && message.senderPublicKey) {
         try {
           const plaintext = await decryptMessage({
-            ciphertext: message.ciphertext,
-            nonce: message.nonce,
+            ciphertext: payload.ciphertext,
+            nonce: payload.nonce,
             senderPublicKey: message.senderPublicKey,
           });
           displayMessage = { ...message, text: plaintext };
@@ -111,7 +113,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
               ...chat,
               lastMessage: {
                 _id: message._id,
-                text: message.text,
+                text: displayMessage.text,
                 sender: senderId,
                 createdAt: message.createdAt,
               },
@@ -213,8 +215,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     try {
       // Encrypt before sending — server never sees plaintext
-      const { ciphertext, nonce, senderPublicKey } = await encryptMessage(text, recipientPublicKey);
-      socket.emit("send-message", { chatId, ciphertext, nonce, senderPublicKey });
+      const { ciphertext, nonce, senderCiphertext, senderNonce, senderPublicKey } = await encryptMessage(
+        text,
+        recipientPublicKey
+      );
+      socket.emit("send-message", {
+        chatId,
+        ciphertext,
+        nonce,
+        senderCiphertext,
+        senderNonce,
+        senderPublicKey,
+      });
     } catch (e) {
       console.error("Encryption failed:", e);
       // Roll back optimistic message on encryption failure

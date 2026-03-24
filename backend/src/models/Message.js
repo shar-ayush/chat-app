@@ -1,4 +1,4 @@
-import mongoose, { Schema,Document } from "mongoose";
+import mongoose, { Schema, Document } from "mongoose";
 
 const MessageSchema = new Schema(
   {
@@ -14,14 +14,19 @@ const MessageSchema = new Schema(
     },
     text: {
       type: String,
-      required: true,
+      default: "",
       trim: true,
     },
+    ciphertext: { type: String, default: null }, // base64
+    nonce: { type: String, default: null }, // base64
+    senderPublicKey: { type: String, default: null }, // base64
+    createdAt: { type: Date, default: Date.now },
+    readBy: [String],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // indexes for faster queries
-MessageSchema.index({ chat: 1, createdAt: 1 }); // oldest one first
+MessageSchema.index({ chat: 1, createdAt: 1 }); 
 
 export const Message = mongoose.model("Message", MessageSchema);

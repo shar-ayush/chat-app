@@ -2,10 +2,10 @@ import axios from "axios";
 import { useAuth } from "@clerk/clerk-expo";
 import { useCallback } from "react";
 
-const API_URL = "https://chat-app-muyj.onrender.com/api";
+// const API_URL = "https://chat-app-muyj.onrender.com/api";
+const API_URL = "http://172.16.212.199:3000/api";
 
-
-const api = axios.create({
+export const api = axios.create({
   baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
 });

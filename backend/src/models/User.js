@@ -19,6 +19,7 @@ const UserSchema = new Schema(
       lowercase: true,
       trim: true,
     },
+    publicKey: { type: String, default: null }, // base64 X25519 public key
     avatar: {
       type: String,
       default: "",

@@ -1,3 +1,4 @@
+import 'react-native-get-random-values';
 import { Stack } from "expo-router";
 import "../global.css";
 import { ClerkProvider } from '@clerk/clerk-expo'

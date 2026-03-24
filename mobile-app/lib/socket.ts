@@ -2,8 +2,10 @@ import { create } from "zustand";
 import { io, Socket } from "socket.io-client";
 import { QueryClient } from "@tanstack/react-query";
 import { Chat, Message, MessageSender } from "@/types";
+import { encryptMessage, decryptMessage } from "@/crypto/messageCrypto";
 
-const SOCKET_URL = "https://chat-app-muyj.onrender.com";
+// const SOCKET_URL = "https://chat-app-muyj.onrender.com";
+const SOCKET_URL = "http://172.16.212.199:3000";
 
 interface SocketState {
   socket: Socket | null;
@@ -18,7 +20,7 @@ interface SocketState {
   disconnect: () => void;
   joinChat: (chatId: string) => void;
   leaveChat: (chatId: string) => void;
-  sendMessage: (chatId: string, text: string, currentUser: MessageSender) => void;
+  sendMessage: (chatId: string, text: string, currentUser: MessageSender, recipientPublicKey: string) => Promise<void>;
   sendTyping: (chatId: string, isTyping: boolean) => void;
 }
 
@@ -72,17 +74,33 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       console.error("Socket error:", error.message);
     });
 
-    socket.on("new-message", (message: Message) => {
+    socket.on("new-message", async (message: Message) => {
       const senderId = (message.sender as MessageSender)._id;
       const { currentChatId } = get();
 
+      // Decrypt the message if it has an encrypted payload
+      let displayMessage = message;
+      if (message.ciphertext && message.nonce && message.senderPublicKey) {
+        try {
+          const plaintext = await decryptMessage({
+            ciphertext: message.ciphertext,
+            nonce: message.nonce,
+            senderPublicKey: message.senderPublicKey,
+          });
+          displayMessage = { ...message, text: plaintext };
+        } catch (e) {
+          console.warn("Failed to decrypt incoming message:", e);
+          displayMessage = { ...message, text: "[Encrypted message]" };
+        }
+      }
+
       // add message to the chat's message list, replacing optimistic messages
       queryClient.setQueryData<Message[]>(["messages", message.chat], (old) => {
-        if (!old) return [message];
+        if (!old) return [displayMessage];
         // remove any optimistic messages (temp IDs) and add the real one
         const filtered = old.filter((m) => !m._id.startsWith("temp-"));
         if (filtered.some((m) => m._id === message._id)) return filtered;
-        return [...filtered, message];
+        return [...filtered, displayMessage];
       });
 
       // Update chat's lastMessage directly for instant UI update
@@ -173,11 +191,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       socket.emit("leave-chat", chatId);
     }
   },
-  sendMessage: (chatId, text, currentUser) => {
+  sendMessage: async (chatId, text, currentUser, recipientPublicKey) => {
     const { socket, queryClient } = get();
     if (!socket?.connected || !queryClient) return;
 
-    // optimistic updates
+    // optimistic update — show plaintext immediately
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage: Message = {
       _id: tempId,
@@ -188,13 +206,24 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       updatedAt: new Date().toISOString(),
     };
 
-    // add optimistic message immediately
     queryClient.setQueryData<Message[]>(["messages", chatId], (old) => {
       if (!old) return [optimisticMessage];
       return [...old, optimisticMessage];
     });
 
-    socket.emit("send-message", { chatId, text });
+    try {
+      // Encrypt before sending — server never sees plaintext
+      const { ciphertext, nonce, senderPublicKey } = await encryptMessage(text, recipientPublicKey);
+      socket.emit("send-message", { chatId, ciphertext, nonce, senderPublicKey });
+    } catch (e) {
+      console.error("Encryption failed:", e);
+      // Roll back optimistic message on encryption failure
+      queryClient.setQueryData<Message[]>(["messages", chatId], (old) => {
+        if (!old) return [];
+        return old.filter((m) => m._id !== tempId);
+      });
+      return;
+    }
 
     const errorHandler = (error: { message: string }) => {
       queryClient.setQueryData<Message[]>(["messages", chatId], (old) => {

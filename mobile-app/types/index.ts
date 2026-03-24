@@ -3,6 +3,7 @@ export interface User {
   name: string;
   email: string;
   avatar: string;
+  publicKey?: string;
 }
 
 export interface MessageSender {
@@ -17,6 +18,9 @@ export interface Message {
   chat: string;
   sender: MessageSender | string;
   text: string;
+  ciphertext?: string;
+  nonce?: string;
+  senderPublicKey?: string;
   createdAt: string;
   updatedAt: string;
 }

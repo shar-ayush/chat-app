@@ -17,7 +17,7 @@ function patchNaclRandom() {
 }
 export async function initializeKeyPair(userId: string, authToken: string) {
   try {
-    console.log('Starting E2E key initialization for user:', userId);
+    // console.log('Starting E2E key initialization for user:', userId);
     
     // Patch PRNG before any nacl operation
     patchNaclRandom();
@@ -25,13 +25,13 @@ export async function initializeKeyPair(userId: string, authToken: string) {
     const stored = await AsyncStorage.getItem(KEY_STORAGE);
 
     if (stored) {
-      console.log('Found existing keypair in storage, uploading public key...');
+      // console.log('Found existing keypair in storage, uploading public key...');
       const parsed = JSON.parse(stored);
       await uploadPublicKey(userId, parsed.publicKey, authToken);
       return parsed;
     }
 
-    console.log('Generating new keypair...');
+    // console.log('Generating new keypair...');
     const keyPair = nacl.box.keyPair();
 
     const keypairData = {
@@ -40,13 +40,13 @@ export async function initializeKeyPair(userId: string, authToken: string) {
     };
 
     await AsyncStorage.setItem(KEY_STORAGE, JSON.stringify(keypairData));
-    console.log('Keypair saved to storage, uploading public key to server...');
+    // console.log('Keypair saved to storage, uploading public key to server...');
     await uploadPublicKey(userId, keypairData.publicKey, authToken);
 
     return keypairData;
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error('E2E key init failed:', errorMsg);
+    // console.error('E2E key init failed:', errorMsg);
     throw err;
   }
 }
@@ -57,10 +57,10 @@ async function uploadPublicKey(userId: string, publicKey: string, authToken: str
       { publicKey },
       { headers: { Authorization: `Bearer ${authToken}` } }
     );
-    console.log('Public key uploaded successfully:', response.data);
+    // console.log('Public key uploaded successfully:', response.data);
     return response.data;
   } catch (err) {
-    console.error('Failed to upload public key:', err);
+    // console.error('Failed to upload public key:', err);
     throw new Error(`Public key upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
   }
 }

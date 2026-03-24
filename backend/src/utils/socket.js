@@ -82,6 +82,7 @@ export const initializeSocket = (httpServer) => {
           ciphertext,
           nonce,
           senderPublicKey,
+          readBy: [userId] // Sender automatically reads their own message
         });
 
         chat.lastMessage = message._id;

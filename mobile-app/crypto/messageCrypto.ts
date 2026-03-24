@@ -19,26 +19,70 @@ export async function encryptMessage(plaintext: string, recipientPublicKeyB64: s
   const senderSecretKey = decodeBase64(senderSecretKeyB64);
   const recipientPublicKey = decodeBase64(recipientPublicKeyB64);
 
-  // Random 24-byte nonce — different for every message
-  const nonce = nacl.randomBytes(nacl.box.nonceLength);
+  // Random 24-byte nonces - one for recipient payload and one for sender payload
+  const recipientNonce = nacl.randomBytes(nacl.box.nonceLength);
+  const senderNonce = nacl.randomBytes(nacl.box.nonceLength);
 
   // TextEncoder gives a proper Uint8Array, avoids tweetnacl-util type issues
   const messageBytes = new TextEncoder().encode(plaintext);
 
   // nacl.box = X25519 key exchange + XSalsa20-Poly1305 encryption
-  const encrypted = nacl.box(
+  const encryptedForRecipient = nacl.box(
     messageBytes,
-    nonce,
+    recipientNonce,
     recipientPublicKey,
     senderSecretKey
   );
 
+  // Sender copy allows decrypting your own historical messages on this device.
+  const encryptedForSender = nacl.box(
+    messageBytes,
+    senderNonce,
+    decodeBase64(senderPublicKey),
+    senderSecretKey
+  );
+
   return {
-    ciphertext: encodeBase64(encrypted),
-    nonce: encodeBase64(nonce),
+    ciphertext: encodeBase64(encryptedForRecipient),
+    nonce: encodeBase64(recipientNonce),
+    senderCiphertext: encodeBase64(encryptedForSender),
+    senderNonce: encodeBase64(senderNonce),
     // Public key so recipient knows whose key to use for decryption
-    senderPublicKey: (await getKeyPair()).publicKey,
+    senderPublicKey,
   };
+}
+
+type DecryptableMessage = {
+  sender?: { _id?: string } | string;
+  ciphertext?: string;
+  nonce?: string;
+  senderCiphertext?: string;
+  senderNonce?: string;
+};
+
+export function selectEncryptedPayloadForUser<T extends DecryptableMessage>(
+  message: T,
+  currentUserId?: string
+) {
+  const senderId =
+    typeof message.sender === "string" ? message.sender : message.sender?._id;
+  const isFromCurrentUser = Boolean(currentUserId && senderId === currentUserId);
+
+  if (isFromCurrentUser && message.senderCiphertext && message.senderNonce) {
+    return {
+      ciphertext: message.senderCiphertext,
+      nonce: message.senderNonce,
+    };
+  }
+
+  if (message.ciphertext && message.nonce) {
+    return {
+      ciphertext: message.ciphertext,
+      nonce: message.nonce,
+    };
+  }
+
+  return null;
 }
 
 export async function decryptMessage(payload: {

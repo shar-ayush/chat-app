@@ -11,13 +11,14 @@ const ChatItem = ({ chat, onPress }: { chat: Chat; onPress: () => void }) => {
 
   const isOnline = onlineUsers.has(participant._id);
   const isTyping = typingUsers.get(chat._id) === participant._id;
-  const hasUnread = unreadChats.has(chat._id);
+  const hasUnread = unreadChats.has(chat._id) || (chat.unreadCount && chat.unreadCount > 0) ? true : false;
+  const unreadCount = chat.unreadCount || 0;
 
   return (
     <Pressable className="flex-row items-center py-3 active:opacity-70" onPress={onPress}>
       {/* avatar & online indicator */}
       <View className="relative">
-        <Image source={participant.avatar} style={{ width: 56, height: 56, borderRadius: 999 }} />
+        <Image source={{ uri: participant.avatar }} style={{ width: 56, height: 56, borderRadius: 999 }} />
         {isOnline && (
           <View className="absolute bottom-0 right-0 size-4 bg-green-500 rounded-full border-[3px] border-surface" />
         )}
@@ -33,11 +34,17 @@ const ChatItem = ({ chat, onPress }: { chat: Chat; onPress: () => void }) => {
           </Text>
 
           <View className="flex-row items-center gap-2">
-            {hasUnread && <View className="w-2.5 h-2.5 bg-primary rounded-full" />}
+            {hasUnread && (
+              <View className="flex flex-row bg-primary rounded-full px-2 py-1 min-w-[20px] items-center justify-center">
+                <Text className="text-xs text-white font-medium">
+                  {unreadCount > 99 ? '99+' : String(unreadCount)}
+                </Text>
+              </View>
+            )}
             <Text className="text-xs text-subtle-foreground">
               {chat.lastMessageAt
                 ? formatDistanceToNow(new Date(chat.lastMessageAt), { addSuffix: false })
-                : ""}
+                : null}
             </Text>
           </View>
         </View>

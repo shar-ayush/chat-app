@@ -105,10 +105,16 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         return [...filtered, displayMessage];
       });
 
-      // Update chat's lastMessage directly for instant UI update
+      // Update chat's lastMessage directly for instant UI update.
+      // If the message is from the other participant and this chat isn't open,
+      // increment unreadCount exactly once per real message id.
       queryClient.setQueryData<Chat[]>(["chats"], (oldChats) => {
         return oldChats?.map((chat) => {
           if (chat._id === message.chat) {
+            const alreadyProcessed = chat.lastMessage?._id === message._id;
+            const isFromParticipant = chat.participant && senderId === chat.participant._id;
+            const shouldIncrementUnread = !alreadyProcessed && currentChatId !== message.chat && isFromParticipant;
+
             return {
               ...chat,
               lastMessage: {
@@ -118,6 +124,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
                 createdAt: message.createdAt,
               },
               lastMessageAt: message.createdAt,
+              unreadCount: shouldIncrementUnread ? (chat.unreadCount ?? 0) + 1 : chat.unreadCount,
             };
           }
           return chat;

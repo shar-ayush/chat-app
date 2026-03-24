@@ -2,7 +2,9 @@ import EmptyUI from "@/components/EmptyUI";
 import MessageBubble from "@/components/MessageBubble";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useMessages } from "@/hooks/useMessages";
+import { usePublicKey } from "@/hooks/usePublicKey";
 import { useSocketStore } from "@/lib/socket";
+import { initializeKeyPair } from "@/crypto/keyManager";
 import { MessageSender } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -17,9 +19,11 @@ import {
   Platform,
   ActivityIndicator,
   TextInput,
+  Alert,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "@clerk/clerk-expo";
 
 type ChatParams = {
   id: string;
@@ -35,8 +39,10 @@ const ChatDetailScreen = () => {
   const [isSending, setIsSending] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
+  const { getToken } = useAuth();
   const { data: currentUser } = useCurrentUser();
   const { data: messages, isLoading } = useMessages(chatId);
+  const { data: recipientPublicKey, isLoading: isLoadingPublicKey } = usePublicKey(participantId);
 
   const { joinChat, leaveChat, sendMessage, sendTyping, isConnected, onlineUsers, typingUsers } =
     useSocketStore();
@@ -45,6 +51,14 @@ const ChatDetailScreen = () => {
   const isTyping = typingUsers.get(chatId) === participantId;
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Initialize E2E keypair once when user is available
+  useEffect(() => {
+    if (!currentUser) return;
+    getToken().then((token) => {
+      if (token) initializeKeyPair(currentUser._id, token).catch(console.error);
+    });
+  }, [currentUser, getToken]);
 
   // join chat room on mount, leave on unmount
   useEffect(() => {
@@ -94,9 +108,9 @@ const ChatDetailScreen = () => {
     [chatId, isConnected, sendTyping]
   );
 
-  const handleSend = () => {
+  const handleSend =  async() => {
     console.log({ isSending, isConnected, currentUser, messageText });
-    if (!messageText.trim() || isSending || !isConnected || !currentUser) return;
+    if (!messageText.trim() || isSending || !isConnected || !currentUser || !recipientPublicKey) return;
 
     // stop typing indicator
     if (typingTimeoutRef.current) {
@@ -105,14 +119,17 @@ const ChatDetailScreen = () => {
     sendTyping(chatId, false);
 
     setIsSending(true);
-    sendMessage(chatId, messageText.trim(), {
-      _id: currentUser._id,
-      name: currentUser.name,
-      email: currentUser.email,
-      avatar: currentUser.avatar,
-    });
-    setMessageText("");
-    setIsSending(false);
+    try {
+      await sendMessage(chatId, messageText.trim(), {
+        _id: currentUser._id,
+        name: currentUser.name,
+        email: currentUser.email,
+        avatar: currentUser.avatar,
+      }, recipientPublicKey);
+      setMessageText("");
+    } finally {
+      setIsSending(false);
+    }
 
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });

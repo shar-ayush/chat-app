@@ -6,7 +6,6 @@ import { Chat } from "../models/Chat.js";
 import { User } from "../models/User.js";
 import 'dotenv/config'
 
-// store online users in memory: userId -> socketId
 export const onlineUsers = new Map();
 
 export const initializeSocket = (httpServer) => {
@@ -18,10 +17,8 @@ export const initializeSocket = (httpServer) => {
 
   const io = new SocketServer(httpServer, { cors: { origin: allowedOrigins } });
 
-  // verify socket connection - if the user is authenticated, we will store the user id in the socket
-
   io.use(async (socket, next) => {
-    const token = socket.handshake.auth.token; // this is what user will send from client
+    const token = socket.handshake.auth.token; 
     if (!token) return next(new Error("Authentication error"));
 
     try {
@@ -40,18 +37,13 @@ export const initializeSocket = (httpServer) => {
     }
   });
 
-  // this "connection" event name is special and should be written like this
-  // it's the event that is triggered when a new client connects to the server
   io.on("connection", (socket) => {
     const userId = socket.data.userId;
 
-    // send list of currently online users to the newly connected client
     socket.emit("online-users", { userIds: Array.from(onlineUsers.keys()) });
 
-    // store user in the onlineUsers map
     onlineUsers.set(userId, socket.id);
 
-    // notify others that this current user is online
     socket.broadcast.emit("user-online", { userId });
 
     socket.join(`user:${userId}`);
@@ -64,10 +56,14 @@ export const initializeSocket = (httpServer) => {
       socket.leave(`chat:${chatId}`);
     });
 
-    // handle sending messages
     socket.on("send-message", async (data) => {
       try {
-        const { chatId, text } = data;  
+        const { chatId, ciphertext, nonce, senderPublicKey } = data;
+
+        if (!ciphertext || !nonce || !senderPublicKey) {
+          socket.emit("socket-error", { message: "Missing encrypted payload" });
+          return;
+        }
 
         const chat = await Chat.findOne({
           _id: chatId,
@@ -82,7 +78,10 @@ export const initializeSocket = (httpServer) => {
         const message = await Message.create({
           chat: chatId,
           sender: userId,
-          text,
+          text: "", 
+          ciphertext,
+          nonce,
+          senderPublicKey,
         });
 
         chat.lastMessage = message._id;
@@ -91,10 +90,8 @@ export const initializeSocket = (httpServer) => {
 
         await message.populate("sender", "name avatar");
 
-        // emit to chat room (for users inside the chat)
         io.to(`chat:${chatId}`).emit("new-message", message);
 
-        // also emit to participants' personal rooms (for chat list view)
         for (const participantId of chat.participants) {
           io.to(`user:${participantId}`).emit("new-message", message);
         }
@@ -110,10 +107,8 @@ export const initializeSocket = (httpServer) => {
         isTyping: data.isTyping,
       };
 
-      // emit to chat room (for users inside the chat)
       socket.to(`chat:${data.chatId}`).emit("typing", typingPayload);
 
-      // also emit to other participant's personal room (for chat list view)
       try {
         const chat = await Chat.findById(data.chatId);
         if (chat) {
@@ -129,8 +124,6 @@ export const initializeSocket = (httpServer) => {
 
     socket.on("disconnect", () => {
       onlineUsers.delete(userId);
-
-      // notify others
       socket.broadcast.emit("user-offline", { userId });
     });
   });

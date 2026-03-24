@@ -20,6 +20,8 @@ export interface Message {
   text: string;
   ciphertext?: string;
   nonce?: string;
+  senderCiphertext?: string;
+  senderNonce?: string;
   senderPublicKey?: string;
   createdAt: string;
   updatedAt: string;
@@ -31,6 +33,8 @@ export interface ChatLastMessage {
   sender: string;
   ciphertext?: string;
   nonce?: string;
+  senderCiphertext?: string;
+  senderNonce?: string;
   senderPublicKey?: string;
   createdAt: string;
 }

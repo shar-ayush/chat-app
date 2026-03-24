@@ -4,12 +4,14 @@ import { useCurrentUser } from "@/hooks/useAuth";
 import { useMessages } from "@/hooks/useMessages";
 import { usePublicKey } from "@/hooks/usePublicKey";
 import { useSocketStore } from "@/lib/socket";
+import { useChatApi } from "@/lib/chatApi";
 import { initializeKeyPair } from "@/crypto/keyManager";
 import { MessageSender } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   View,
   Text,
@@ -43,9 +45,11 @@ const ChatDetailScreen = () => {
   const { data: currentUser } = useCurrentUser();
   const { data: messages, isLoading } = useMessages(chatId);
   const { data: recipientPublicKey, isLoading: isLoadingPublicKey } = usePublicKey(participantId);
+  const queryClient = useQueryClient();
 
   const { joinChat, leaveChat, sendMessage, sendTyping, isConnected, onlineUsers, typingUsers } =
     useSocketStore();
+  const { markMessagesAsRead } = useChatApi();
 
   const isOnline = participantId ? onlineUsers.has(participantId) : false;
   const isTyping = typingUsers.get(chatId) === participantId;
@@ -62,7 +66,11 @@ const ChatDetailScreen = () => {
 
   // join chat room on mount, leave on unmount
   useEffect(() => {
-    if (chatId && isConnected) joinChat(chatId);
+    if (chatId && isConnected) {
+      joinChat(chatId);
+      // Mark messages as read when entering the chat
+      markMessagesAsRead(chatId, queryClient).catch(console.error);
+    }
 
     return () => {
       if (chatId) leaveChat(chatId);
@@ -109,7 +117,7 @@ const ChatDetailScreen = () => {
   );
 
   const handleSend =  async() => {
-    console.log({ isSending, isConnected, currentUser, messageText });
+    // console.log({ isSending, isConnected, currentUser, messageText });
     if (!messageText.trim() || isSending || !isConnected || !currentUser || !recipientPublicKey) return;
 
     // stop typing indicator
@@ -144,7 +152,7 @@ const ChatDetailScreen = () => {
           <Ionicons name="arrow-back" size={24} color="#F4A261" />
         </Pressable>
         <View className="flex-row items-center flex-1 ml-2">
-          {avatar && <Image source={avatar} style={{ width: 40, height: 40, borderRadius: 999 }} />}
+          {avatar && <Image source={{ uri: avatar }} style={{ width: 40, height: 40, borderRadius: 999 }} />}
           <View className="ml-3">
             <Text className="text-foreground font-semibold text-base" numberOfLines={1}>
               {name}

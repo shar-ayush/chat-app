@@ -1,17 +1,19 @@
 import { useSSO } from "@clerk/clerk-expo";
 import { useState } from "react";
 import { Alert } from "react-native";
+import * as AuthSession from "expo-auth-session";
 
 function useAuthSocial() {
   const [loadingStrategy, setLoadingStrategy] = useState<string | null>(null);
   const { startSSOFlow } = useSSO();
 
   const handleSocialAuth = async (strategy: "oauth_google" | "oauth_apple") => {
-    if (loadingStrategy) return; // Prevent multiple simultaneous auth attempts
+    if (loadingStrategy) return; 
     setLoadingStrategy(strategy);
 
     try {
-      const { createdSessionId, setActive } = await startSSOFlow({ strategy });
+      const redirectUrl = AuthSession.makeRedirectUri({ path: "oauth-native-callback" });
+      const { createdSessionId, setActive } = await startSSOFlow({ strategy, redirectUrl });
       if (!createdSessionId || !setActive) {
         const provider = strategy === "oauth_google" ? "Google" : "Apple";
         Alert.alert(

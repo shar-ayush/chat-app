@@ -1,16 +1,7 @@
-import { Redirect, Tabs } from 'expo-router'
+import { Tabs } from 'expo-router'
 import {Ionicons} from '@expo/vector-icons'
-import { useAuth } from '@clerk/clerk-expo'
 
 const TabsLayout = () => {
-  const {isSignedIn, isLoaded} = useAuth();
-
-  if(!isLoaded) return null;
-  if(!isSignedIn) {
-    //@ts-ignore
-    return <Redirect href={"/(auth)"} />
-  }
-
   return (
     <Tabs
     screenOptions={{

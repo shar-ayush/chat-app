@@ -1,14 +1,20 @@
-import { useSSO } from "@clerk/clerk-expo";
+import { useAuth, useSSO } from "@clerk/clerk-expo";
 import { useState } from "react";
 import { Alert } from "react-native";
 import * as AuthSession from "expo-auth-session";
 
+
 function useAuthSocial() {
   const [loadingStrategy, setLoadingStrategy] = useState<string | null>(null);
   const { startSSOFlow } = useSSO();
+  const { isSignedIn } = useAuth();
 
   const handleSocialAuth = async (strategy: "oauth_google" | "oauth_apple") => {
-    if (loadingStrategy) return; 
+    if (loadingStrategy || isSignedIn) {
+      console.log("Already signed in, skipping auth");
+      return;
+    }
+    
     setLoadingStrategy(strategy);
 
     try {

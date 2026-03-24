@@ -58,7 +58,7 @@ export const initializeSocket = (httpServer) => {
 
     socket.on("send-message", async (data) => {
       try {
-        const { chatId, ciphertext, nonce, senderPublicKey } = data;
+        const { chatId, ciphertext, nonce, senderCiphertext, senderNonce, senderPublicKey } = data;
 
         if (!ciphertext || !nonce || !senderPublicKey) {
           socket.emit("socket-error", { message: "Missing encrypted payload" });
@@ -81,6 +81,8 @@ export const initializeSocket = (httpServer) => {
           text: "", 
           ciphertext,
           nonce,
+          senderCiphertext: senderCiphertext ?? null,
+          senderNonce: senderNonce ?? null,
           senderPublicKey,
           readBy: [userId] // Sender automatically reads their own message
         });

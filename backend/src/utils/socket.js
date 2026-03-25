@@ -58,11 +58,17 @@ export const initializeSocket = (httpServer) => {
 
     socket.on("send-message", async (data) => {
       try {
-        const { chatId, ciphertext, nonce, senderCiphertext, senderNonce, senderPublicKey } = data;
+        const { localId, chatId, ciphertext, nonce, senderCiphertext, senderNonce, senderPublicKey } = data;
 
-        if (!ciphertext || !nonce || !senderPublicKey) {
-          socket.emit("socket-error", { message: "Missing encrypted payload" });
+        if (!localId || !ciphertext || !nonce || !senderPublicKey) {
+          socket.emit("socket-error", { message: "Missing encrypted payload or localId", localId });
           return;
+        }
+
+        const existingMessage = await Message.findOne({ localId });
+        if (existingMessage) {
+           socket.emit("message_ack", { localId, serverId: existingMessage._id });
+           return;
         }
 
         const chat = await Chat.findOne({
@@ -71,11 +77,12 @@ export const initializeSocket = (httpServer) => {
         });
 
         if (!chat) {
-          socket.emit("socket-error", { message: "Chat not found" });
+          socket.emit("socket-error", { message: "Chat not found", localId });
           return;
         }
 
         const message = await Message.create({
+          localId,
           chat: chatId,
           sender: userId,
           text: "", 
@@ -93,13 +100,15 @@ export const initializeSocket = (httpServer) => {
 
         await message.populate("sender", "name avatar");
 
-        io.to(`chat:${chatId}`).emit("new-message", message);
+        socket.emit("message_ack", { localId: localId, serverId: message._id });
 
         for (const participantId of chat.participants) {
-          io.to(`user:${participantId}`).emit("new-message", message);
+          if (participantId.toString() !== userId) {
+            io.to(`user:${participantId}`).emit("receive_message", message);
+          }
         }
       } catch (error) {
-        socket.emit("socket-error", { message: "Failed to send message" });
+        socket.emit("socket-error", { message: "Failed to send message", localId: data.localId });
       }
     });
 

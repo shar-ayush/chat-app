@@ -19,13 +19,25 @@ export interface LocalMessage {
 
 export const insertMessage = async (msg: LocalMessage) => {
   const db = await getDb();
+  
+  const safeCreatedAt = (typeof msg.created_at !== 'number' || Number.isNaN(msg.created_at)) ? Date.now() : msg.created_at;
+
   await db.runAsync(
-    "INSERT INTO messages (id, chat_id, sender_id, cipher_text, nonce, sender_cipher_text, sender_nonce, sender_public_key, status, created_at, server_id, retry_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status = excluded.status, server_id = excluded.server_id, retry_count = excluded.retry_count",
-    [
-      msg.id, msg.chat_id, msg.sender_id, msg.cipher_text || null, msg.nonce || null, 
-      msg.sender_cipher_text || null, msg.sender_nonce || null, msg.sender_public_key || null, 
-      msg.status, msg.created_at, msg.server_id || null, msg.retry_count || 0
-    ]
+    "INSERT INTO messages (id, chat_id, sender_id, cipher_text, nonce, sender_cipher_text, sender_nonce, sender_public_key, status, created_at, server_id, retry_count) VALUES ($id, $chat_id, $sender_id, $cipher_text, $nonce, $sender_cipher_text, $sender_nonce, $sender_public_key, $status, $created_at, $server_id, $retry_count) ON CONFLICT(id) DO UPDATE SET status = excluded.status, server_id = excluded.server_id, retry_count = excluded.retry_count",
+    {
+      $id: msg.id || "temp-id-fallback",
+      $chat_id: msg.chat_id || "unknown_chat",
+      $sender_id: msg.sender_id || "unknown_sender",
+      $cipher_text: msg.cipher_text ?? "",
+      $nonce: msg.nonce ?? "",
+      $sender_cipher_text: msg.sender_cipher_text ?? "",
+      $sender_nonce: msg.sender_nonce ?? "",
+      $sender_public_key: msg.sender_public_key ?? "",
+      $status: msg.status || 'pending',
+      $created_at: safeCreatedAt,
+      $server_id: msg.server_id ?? "",
+      $retry_count: msg.retry_count ?? 0
+    }
   );
 };
 
@@ -36,20 +48,19 @@ export const updateMessageStatus = async (
   incrementRetry?: boolean
 ) => {
   const db = await getDb();
-  let query = "UPDATE messages SET status = ?";
-  const params: any[] = [status];
+  let query = "UPDATE messages SET status = $status";
+  const params: Record<string, any> = { $status: status, $id: id };
 
   if (serverId) {
-    query += ", server_id = ?";
-    params.push(serverId);
+    query += ", server_id = $server_id";
+    params.$server_id = serverId;
   }
 
   if (incrementRetry) {
     query += ", retry_count = retry_count + 1";
   }
 
-  query += " WHERE id = ?";
-  params.push(id);
+  query += " WHERE id = $id";
 
   await db.runAsync(query, params);
 };
@@ -64,8 +75,8 @@ export const getOldestPendingMessage = async (): Promise<LocalMessage | null> =>
 export const getMessagesByChatId = async (chatId: string): Promise<LocalMessage[]> => {
   const db = await getDb();
   return await db.getAllAsync<LocalMessage>(
-    "SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC",
-    [chatId]
+    "SELECT * FROM messages WHERE chat_id = $chatId ORDER BY created_at ASC",
+    { $chatId: chatId }
   );
 };
 
@@ -81,8 +92,8 @@ export const markMessageAsFailed = async (id: string) => {
 export const checkMessageExistsByServerId = async (serverId: string): Promise<boolean> => {
   const db = await getDb();
   const result = await db.getFirstAsync<{ count: number }>(
-    "SELECT count(*) as count FROM messages WHERE server_id = ?",
-    [serverId]
+    "SELECT count(*) as count FROM messages WHERE server_id = $serverId",
+    { $serverId: serverId }
   );
   return (result?.count || 0) > 0;
 };

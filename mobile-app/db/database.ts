@@ -14,8 +14,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const initDb = async () => {
   const db = await getDb();
   
-  // Reset timestamp once to pull all historical messages from server since we previously wiped the SQLite DB
-  await AsyncStorage.removeItem('lastSyncTimestamp');
+  const version = await AsyncStorage.getItem("db_version");
+  if (version !== "2") {
+    // One-time migration to reset the table for devices stuck on the old schema
+    await db.execAsync("DROP TABLE IF EXISTS messages");
+    await AsyncStorage.removeItem('lastSyncTimestamp');
+    await AsyncStorage.setItem("db_version", "2");
+  }
 
   await db.execAsync(`
     PRAGMA journal_mode = WAL;

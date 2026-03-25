@@ -1,10 +1,14 @@
 import { create } from "zustand";
 import { io, Socket } from "socket.io-client";
 import { QueryClient } from "@tanstack/react-query";
-import { Chat, Message, MessageSender, User } from "@/types";
-import { encryptMessage, decryptMessage, selectEncryptedPayloadForUser } from "@/crypto/messageCrypto";
+import { Chat, MessageSender, User } from "@/types";
+import { encryptMessage, decryptMessage } from "@/crypto/messageCrypto";
+import * as Crypto from 'expo-crypto';
+import { insertMessage } from "../db/messageQueries";
+import { triggerSync } from "./syncEngine";
+import { getDb } from "../db/database";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// const SOCKET_URL = "https://chat-app-muyj.onrender.com";
 const SOCKET_URL = "http://172.16.212.173:3000";
 
 interface SocketState {
@@ -41,9 +45,53 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     const socket = io(SOCKET_URL, { auth: { token } });
 
-    socket.on("connect", () => {
+    socket.on("connect", async () => {
       console.log("Socket connected, id:", socket.id);
       set({ isConnected: true });
+      triggerSync(); // start syncing pending messages when reconnected
+
+      try {
+        // Pull Sync Missed Messages
+        const after = await AsyncStorage.getItem('lastSyncTimestamp') || "0";
+
+        const response = await fetch(`${SOCKET_URL}/api/messages/sync?after=${after}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (response.ok) {
+          const missedMessages = await response.json();
+          console.log(`PULL SYNC: Fetched ${missedMessages.length} missed messages from backend since ${after}`);
+          let syncedCount = 0;
+          for (const msg of missedMessages) {
+            const senderId = typeof msg.sender === 'object' ? msg.sender._id : msg.sender;
+            await insertMessage({
+              id: msg.localId || Crypto.randomUUID(),
+              chat_id: msg.chat,
+              sender_id: senderId,
+              cipher_text: msg.ciphertext,
+              nonce: msg.nonce,
+              sender_cipher_text: msg.senderCiphertext,
+              sender_nonce: msg.senderNonce,
+              sender_public_key: msg.senderPublicKey,
+              status: 'delivered',
+              created_at: new Date(msg.createdAt).getTime(),
+              server_id: msg._id,
+              retry_count: 0
+            });
+            syncedCount++;
+          }
+          if (syncedCount > 0) {
+            queryClient.invalidateQueries({ queryKey: ["messages"] });
+            queryClient.invalidateQueries({ queryKey: ["chats"] });
+          }
+
+          await AsyncStorage.setItem('lastSyncTimestamp', Date.now().toString());
+        } else {
+           console.error("PULL SYNC FAILED:", response.status, await response.text());
+        }
+      } catch (err) {
+        console.error("Failed to pull sync messages:", err);
+      }
     });
 
     socket.on("disconnect", () => {
@@ -52,7 +100,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     socket.on("online-users", ({ userIds }: { userIds: string[] }) => {
-      console.log("Received online-users:", userIds);
       set({ onlineUsers: new Set(userIds) });
     });
 
@@ -70,44 +117,50 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       });
     });
 
-    socket.on("socket-error", (error: { message: string }) => {
-      console.error("Socket error:", error.message);
+    socket.on("socket-error", (error: { message: string, localId?: string }) => {
+      console.error("Socket error:", error.message, "localId:", error.localId);
     });
 
-    socket.on("new-message", async (message: Message) => {
-      const senderId = (message.sender as MessageSender)._id;
+    socket.on("receive_message", async (message: any) => {
+      const senderId = typeof message.sender === 'object' ? message.sender._id : message.sender;
       const { currentChatId } = get();
-      const currentUser = queryClient.getQueryData<User>(["currentUser"]);
 
-      // Decrypt the message if it has an encrypted payload
-      let displayMessage = message;
-      const payload = selectEncryptedPayloadForUser(message, currentUser?._id);
-      if (payload && message.senderPublicKey) {
-        try {
-          const plaintext = await decryptMessage({
-            ciphertext: payload.ciphertext,
-            nonce: payload.nonce,
-            senderPublicKey: message.senderPublicKey,
-          });
-          displayMessage = { ...message, text: plaintext };
-        } catch (e) {
-          console.warn("Failed to decrypt incoming message:", e);
-          displayMessage = { ...message, text: "[Encrypted message]" };
-        }
-      }
-
-      // add message to the chat's message list, replacing optimistic messages
-      queryClient.setQueryData<Message[]>(["messages", message.chat], (old) => {
-        if (!old) return [displayMessage];
-        // remove any optimistic messages (temp IDs) and add the real one
-        const filtered = old.filter((m) => !m._id.startsWith("temp-"));
-        if (filtered.some((m) => m._id === message._id)) return filtered;
-        return [...filtered, displayMessage];
+      // Ensure it goes into SQLite as delivered
+      await insertMessage({
+        id: message.localId || Crypto.randomUUID(), // fallback if legacy messages lack localId
+        chat_id: message.chat,
+        sender_id: senderId,
+        cipher_text: message.ciphertext,
+        nonce: message.nonce,
+        sender_cipher_text: message.senderCiphertext,
+        sender_nonce: message.senderNonce,
+        sender_public_key: message.senderPublicKey,
+        status: 'delivered',
+        created_at: new Date(message.createdAt).getTime(),
+        server_id: message._id,
+        retry_count: 0
       });
 
+      // Force UI to pick up new SQLite message
+      queryClient.invalidateQueries({ queryKey: ["messages", message.chat] });
+
+      await AsyncStorage.setItem('lastSyncTimestamp', Date.now().toString());
+
+      let plaintext = "[Encrypted Message]";
+      try {
+        const payload = {
+          ciphertext: message.ciphertext,
+          nonce: message.nonce,
+          senderPublicKey: message.senderPublicKey,
+        };
+        if (payload.ciphertext && payload.nonce && payload.senderPublicKey) {
+          plaintext = await decryptMessage(payload);
+        }
+      } catch (e) {
+        console.warn("Decrypt error in socket:", e);
+      }
+
       // Update chat's lastMessage directly for instant UI update.
-      // If the message is from the other participant and this chat isn't open,
-      // increment unreadCount exactly once per real message id.
       queryClient.setQueryData<Chat[]>(["chats"], (oldChats) => {
         return oldChats?.map((chat) => {
           if (chat._id === message.chat) {
@@ -119,7 +172,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
               ...chat,
               lastMessage: {
                 _id: message._id,
-                text: displayMessage.text,
+                text: plaintext,
                 sender: senderId,
                 createdAt: message.createdAt,
               },
@@ -148,6 +201,12 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         typingUsers.delete(message.chat);
         return { typingUsers: typingUsers };
       });
+    });
+
+    // Handle new-message from sender's perspective (when sender makes request from another device, etc)
+    socket.on("new-message", async (message: any) => {
+      // Just forward to receive_message logic
+      socket.emit("receive_message", message);
     });
 
     socket.on(
@@ -201,58 +260,62 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
   },
   sendMessage: async (chatId, text, currentUser, recipientPublicKey) => {
-    const { socket, queryClient } = get();
-    if (!socket?.connected || !queryClient) return;
+    const { queryClient } = get();
+    if (!queryClient) return;
 
-    // optimistic update — show plaintext immediately
-    const tempId = `temp-${Date.now()}`;
-    const optimisticMessage: Message = {
-      _id: tempId,
-      chat: chatId,
-      sender: currentUser,
-      text,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    queryClient.setQueryData<Message[]>(["messages", chatId], (old) => {
-      if (!old) return [optimisticMessage];
-      return [...old, optimisticMessage];
-    });
+    const localId = Crypto.randomUUID();
 
     try {
-      // Encrypt before sending — server never sees plaintext
+      // Encrypt before saving locally
       const { ciphertext, nonce, senderCiphertext, senderNonce, senderPublicKey } = await encryptMessage(
         text,
         recipientPublicKey
       );
-      socket.emit("send-message", {
-        chatId,
-        ciphertext,
+
+      // Insert directly to SQLite as pending
+      await insertMessage({
+        id: localId,
+        chat_id: chatId,
+        sender_id: currentUser._id,
+        cipher_text: ciphertext,
         nonce,
-        senderCiphertext,
-        senderNonce,
-        senderPublicKey,
+        sender_cipher_text: senderCiphertext,
+        sender_nonce: senderNonce,
+        sender_public_key: senderPublicKey,
+        status: 'pending',
+        created_at: Date.now(),
+        server_id: null,
+        retry_count: 0
       });
+
+      // Force UI to pick up new SQLite message immediately
+      queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
+
+      // Update chat's lastMessage directly for instant UI update.
+      queryClient.setQueryData<Chat[]>(["chats"], (oldChats) => {
+        return oldChats?.map((chat) => {
+          if (chat._id === chatId) {
+            return {
+              ...chat,
+              lastMessage: {
+                _id: localId,
+                text: text,
+                sender: currentUser._id,
+                createdAt: new Date().toISOString(),
+              },
+              lastMessageAt: new Date().toISOString(),
+            };
+          }
+          return chat;
+        });
+      });
+
+      // Trigger sync engine to push to backend
+      triggerSync();
+
     } catch (e) {
-      console.error("Encryption failed:", e);
-      // Roll back optimistic message on encryption failure
-      queryClient.setQueryData<Message[]>(["messages", chatId], (old) => {
-        if (!old) return [];
-        return old.filter((m) => m._id !== tempId);
-      });
-      return;
+      console.error("Encryption/Save fail:", e);
     }
-
-    const errorHandler = (error: { message: string }) => {
-      queryClient.setQueryData<Message[]>(["messages", chatId], (old) => {
-        if (!old) return [];
-        return old.filter((m) => m._id !== tempId);
-      });
-      socket.off("socket-error", errorHandler);
-    };
-
-    socket.once("socket-error", errorHandler);
   },
 
   sendTyping: (chatId, isTyping) => {

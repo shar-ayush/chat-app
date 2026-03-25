@@ -60,7 +60,7 @@ const ChatDetailScreen = () => {
   useEffect(() => {
     if (!currentUser) return;
     getToken().then((token) => {
-      if (token) initializeKeyPair(currentUser._id, token).catch(console.error);
+      if (token) initializeKeyPair(currentUser._id, token).catch(console.warn);
     });
   }, [currentUser, getToken]);
 
@@ -117,8 +117,12 @@ const ChatDetailScreen = () => {
   );
 
   const handleSend =  async() => {
-    // console.log({ isSending, isConnected, currentUser, messageText });
-    if (!messageText.trim() || isSending || !isConnected || !currentUser || !recipientPublicKey) return;
+    if (!messageText.trim() || isSending || !currentUser) return;
+
+    if (!recipientPublicKey) {
+      Alert.alert("Offline", "Cannot fetch recipient's encryption key. Please connect to the internet once to initialize this chat.");
+      return;
+    }
 
     // stop typing indicator
     if (typingTimeoutRef.current) {
@@ -201,7 +205,7 @@ const ChatDetailScreen = () => {
               }}
             >
               {messages.map((message) => {
-                const senderId = (message.sender as MessageSender)._id;
+                const senderId = typeof message.sender === "object" ? (message.sender as MessageSender)._id : message.sender;
                 const isFromMe = currentUser ? senderId === currentUser._id : false;
 
                 return <MessageBubble key={message._id} message={message} isFromMe={isFromMe} />;

@@ -36,6 +36,7 @@ export const useChats = () => {
         })
       );
     },
+    enabled: !!currentUser,
   });
 };
 

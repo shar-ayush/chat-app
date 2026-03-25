@@ -8,9 +8,16 @@ import AuthSync from "@/components/AuthSync";
 import { StatusBar } from "expo-status-bar";
 import SocketConnection from "@/components/SocketConnection";
 
+import { useEffect } from 'react';
+import { initDb } from '@/db/database';
+
 const queryClient = new QueryClient();
 
 export default function RootLayout() {
+  useEffect(() => {
+    initDb().catch(console.error);
+  }, []);
+
   return (
     <ClerkProvider 
     tokenCache={tokenCache} 

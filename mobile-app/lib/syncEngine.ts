@@ -7,10 +7,7 @@ let isProcessing = false;
 export const processQueueSequentially = async () => {
   if (isProcessing) return; // Prevent concurrent processing
   
-  const netState = await NetInfo.fetch();
-  if (!netState.isConnected) return; // Offline, pause queue
-
-  const socket = useSocketStore.getState().socket;
+  const { socket, queryClient } = useSocketStore.getState();
   if (!socket?.connected) return; // Socket disconnected, pause queue
 
   isProcessing = true;
@@ -82,6 +79,10 @@ export const processQueueSequentially = async () => {
     if (result.message_ack && result.serverId) {
       // Success
       await updateMessageStatus(msg.id, 'sent', result.serverId);
+      if (queryClient) {
+        queryClient.invalidateQueries({ queryKey: ["messages", msg.chat_id] });
+        queryClient.invalidateQueries({ queryKey: ["chats"] });
+      }
     } else {
       // Failed or Timeout -> re-queue with retry bump
       console.warn("Queue item failed:", result.error);

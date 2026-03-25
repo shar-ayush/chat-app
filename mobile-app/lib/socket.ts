@@ -5,7 +5,7 @@ import { Chat, Message, MessageSender, User } from "@/types";
 import { encryptMessage, decryptMessage, selectEncryptedPayloadForUser } from "@/crypto/messageCrypto";
 
 // const SOCKET_URL = "https://chat-app-muyj.onrender.com";
-const SOCKET_URL = "http://172.16.213.18:3000";
+const SOCKET_URL = "http://172.16.212.173:3000";
 
 interface SocketState {
   socket: Socket | null;

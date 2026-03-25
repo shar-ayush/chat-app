@@ -4,6 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useNetworkSync } from "@/hooks/useNetworkSync";
 
+import { triggerSync } from "@/lib/syncEngine";
+
 const SocketConnection = () => {
   useNetworkSync();
   const { getToken, isSignedIn } = useAuth();
@@ -22,6 +24,17 @@ const SocketConnection = () => {
       disconnect();
     };
   }, [isSignedIn, connect, disconnect, getToken, queryClient]);
+
+  // Failsafe aggressive background polling for stuck messages
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const socket = useSocketStore.getState().socket;
+      if (socket?.connected) {
+         triggerSync();
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   return null;
 };

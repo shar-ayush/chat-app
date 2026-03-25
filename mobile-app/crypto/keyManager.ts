@@ -27,7 +27,9 @@ export async function initializeKeyPair(userId: string, authToken: string) {
     if (stored) {
       // console.log('Found existing keypair in storage, uploading public key...');
       const parsed = JSON.parse(stored);
-      await uploadPublicKey(userId, parsed.publicKey, authToken);
+      await uploadPublicKey(userId, parsed.publicKey, authToken).catch(e => {
+        // console.warn('Offline or failed to upload existing public key, ignoring...', e);
+      });
       return parsed;
     }
 
@@ -41,7 +43,9 @@ export async function initializeKeyPair(userId: string, authToken: string) {
 
     await AsyncStorage.setItem(KEY_STORAGE, JSON.stringify(keypairData));
     // console.log('Keypair saved to storage, uploading public key to server...');
-    await uploadPublicKey(userId, keypairData.publicKey, authToken);
+    await uploadPublicKey(userId, keypairData.publicKey, authToken).catch(e => {
+        // console.warn('Network error: Public key upload failed, will need to upload later.', e);
+    });
 
     return keypairData;
   } catch (err) {

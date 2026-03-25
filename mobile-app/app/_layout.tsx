@@ -8,15 +8,23 @@ import AuthSync from "@/components/AuthSync";
 import { StatusBar } from "expo-status-bar";
 import SocketConnection from "@/components/SocketConnection";
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { initDb } from '@/db/database';
+// Moved useNetworkSync to SocketConnection
 
 const queryClient = new QueryClient();
 
 export default function RootLayout() {
+  const [dbReady, setDbReady] = useState(false);
+
   useEffect(() => {
-    initDb().catch(console.error);
+    initDb().then(() => {
+      console.log("Database initialized successfully");
+      setDbReady(true);
+    }).catch(console.error);
   }, []);
+
+  if (!dbReady) return null;
 
   return (
     <ClerkProvider 

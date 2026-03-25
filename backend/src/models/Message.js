@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 
 const MessageSchema = new Schema(
   {
+    localId: { type: String, unique: true, sparse: true }, // For idempotency
     chat: {
       type: Schema.Types.ObjectId,
       ref: "Chat",

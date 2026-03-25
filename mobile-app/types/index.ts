@@ -25,6 +25,7 @@ export interface Message {
   senderPublicKey?: string;
   createdAt: string;
   updatedAt: string;
+  status?: "pending" | "sending" | "sent" | "delivered" | "failed";
 }
 
 export interface ChatLastMessage {

@@ -2,8 +2,10 @@ import { useSocketStore } from "@/lib/socket";
 import { useAuth } from "@clerk/clerk-expo";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { useNetworkSync } from "@/hooks/useNetworkSync";
 
 const SocketConnection = () => {
+  useNetworkSync();
   const { getToken, isSignedIn } = useAuth();
   const queryClient = useQueryClient();
   const connect = useSocketStore((state) => state.connect);

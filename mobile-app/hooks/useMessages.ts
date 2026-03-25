@@ -1,42 +1,56 @@
 import { useQuery } from "@tanstack/react-query";
-import { useApi } from "@/lib/axios";
 import type { Message } from "@/types";
-import { decryptMessage, selectEncryptedPayloadForUser } from "@/crypto/messageCrypto";
+import { decryptMessage } from "@/crypto/messageCrypto";
 import { useCurrentUser } from "./useAuth";
+import { getMessagesByChatId, LocalMessage } from "../db/messageQueries";
 
 export const useMessages = (chatId: string) => {
-  const { apiWithAuth } = useApi();
   const { data: currentUser } = useCurrentUser();
 
   return useQuery({
     queryKey: ["messages", chatId],
     queryFn: async (): Promise<Message[]> => {
-      const { data } = await apiWithAuth<Message[]>({
-        method: "GET",
-        url: `/messages/chat/${chatId}`,
-      });
+      if (!currentUser) return [];
 
-      // Decrypt any E2E-encrypted messages
-      return Promise.all(
-        data.map(async (msg) => {
-          const payload = selectEncryptedPayloadForUser(msg, currentUser?._id);
+      const localMessages = await getMessagesByChatId(chatId);
 
-          if (payload && msg.senderPublicKey) {
+      const mappedMessages = await Promise.all(
+        localMessages.map(async (msg: LocalMessage) => {
+          let text = "[Encrypted message]";
+          
+          const isFromCurrentUser = msg.sender_id === currentUser._id;
+          
+          let ciphertextToDecrypt = isFromCurrentUser ? msg.sender_cipher_text : msg.cipher_text;
+          let nonceToDecrypt = isFromCurrentUser ? msg.sender_nonce : msg.nonce;
+
+          if (ciphertextToDecrypt && nonceToDecrypt && msg.sender_public_key) {
             try {
-              const plaintext = await decryptMessage({
-                ciphertext: payload.ciphertext,
-                nonce: payload.nonce,
-                senderPublicKey: msg.senderPublicKey,
+              text = await decryptMessage({
+                ciphertext: ciphertextToDecrypt,
+                nonce: nonceToDecrypt,
+                senderPublicKey: msg.sender_public_key,
               });
-              return { ...msg, text: plaintext };
             } catch {
-              return { ...msg, text: "[Encrypted message]" };
+              text = "[Decryption Failed]";
             }
           }
-          return msg;
+
+          const messageObj: Message = {
+            _id: msg.server_id || msg.id, // Prefer server ID if delivered/sent, else use local UUID
+            chat: msg.chat_id,
+            sender: msg.sender_id, // UI will resolve User if needed, or we just pass the ID
+            text,
+            createdAt: new Date(msg.created_at).toISOString(),
+            updatedAt: new Date(msg.created_at).toISOString(),
+            status: msg.status,
+          };
+          
+          return messageObj;
         })
       );
+
+      return mappedMessages;
     },
-    enabled: !!chatId,
+    enabled: !!chatId && !!currentUser,
   });
 };

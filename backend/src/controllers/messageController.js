@@ -1,5 +1,6 @@
 import { Message } from "../models/Message.js";
 import { Chat } from "../models/Chat.js";
+import { getBufferedMessages } from "../utils/messageBuffer.js";
 
 export async function syncMessages(req, res, next) {
   try {
@@ -31,6 +32,24 @@ export async function syncMessages(req, res, next) {
       .populate("sender", "name email avatar")
       .sort({ createdAt: 1 });
 
+    // Inject any new messages sitting in the RAM buffer
+    let hasBuffered = false;
+    for (const chatId of chatIds) {
+      const buffered = getBufferedMessages(chatId.toString());
+      for (const msg of buffered) {
+        // Only include if it meets the 'after' criteria
+        const msgDate = new Date(msg.createdAt);
+        if (!matchQuery.createdAt || msgDate > matchQuery.createdAt.$gt) {
+          messages.push(msg);
+          hasBuffered = true;
+        }
+      }
+    }
+
+    if (hasBuffered) {
+      messages.sort((a, b) => new Date(a.createdAt).valueOf() - new Date(b.createdAt).valueOf());
+    }
+
     res.json(messages);
   } catch (error) {
     res.status(500);
@@ -56,6 +75,11 @@ export async function getMessages(req, res, next) {
     const messages = await Message.find({ chat: chatId })
       .populate("sender", "name email avatar")
       .sort({ createdAt: 1 }); 
+
+    const buffered = getBufferedMessages(chatId.toString());
+    if (buffered.length > 0) {
+      messages.push(...buffered);
+    }
 
     res.json(messages);
   } catch (error) {

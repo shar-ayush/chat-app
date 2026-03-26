@@ -80,6 +80,8 @@ export const processQueueSequentially = async () => {
       // Success
       await updateMessageStatus(msg.id, 'sent', result.serverId);
       if (queryClient) {
+        // Now that the backend /chats API includes the RAM buffer,
+        // it is safe to invalidate 'chats' to keep the home screen freshly in sync!
         queryClient.invalidateQueries({ queryKey: ["messages", msg.chat_id] });
         queryClient.invalidateQueries({ queryKey: ["chats"] });
       }

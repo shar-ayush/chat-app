@@ -13,11 +13,17 @@ const MessageSchema = new Schema(
       ref: "User",
       required: true,
     },
+    type: { type: String, enum: ["text", "file"], default: "text" },
     text: {
       type: String,
       default: "",
       trim: true,
     },
+    // File message fields
+    fileUrl: { type: String, default: null },
+    fileName: { type: String, default: null },
+    mimeType: { type: String, default: null },
+    fileSize: { type: Number, default: null },
     ciphertext: { type: String, default: null }, // base64
     nonce: { type: String, default: null }, // base64
     senderCiphertext: { type: String, default: null }, // base64 (sender copy)

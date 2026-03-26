@@ -10,9 +10,12 @@ import {
   Dimensions,
   StatusBar,
   ScrollView,
+  Platform,
 } from "react-native";
+import * as FileSystemLegacy from "expo-file-system/legacy";
 import { Image } from "expo-image";
-import { Video, ResizeMode } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
+import * as Sharing from "expo-sharing";
 import { Ionicons } from "@expo/vector-icons";
 import * as MediaLibrary from "expo-media-library";
 import { getCachedFile, downloadAndCache, formatFileSize } from "@/lib/fileCache";
@@ -39,7 +42,12 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
   const isVideo = mimeType?.startsWith("video/");
   const isAudio = mimeType?.startsWith("audio/");
 
-  // On mount, check if file is already cached
+  const src = localUri ?? fileUrl;
+
+  const player = useVideoPlayer(src ?? "", (player) => {
+    player.loop = false;
+  });
+
   useEffect(() => {
     if (localUri || !fileUrl || !fileName) return;
     setDownloadState("checking");
@@ -66,60 +74,85 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
     }
   };
 
-  const handleOpenExternal = async () => {
-    const target = localUri ?? fileUrl;
-    if (!target) return;
-    try {
-      await Linking.openURL(target);
-    } catch {
-      Alert.alert("Error", "Could not open file.");
-    }
-  };
+  const handleSaveFile = async (type: "gallery" | "files" = "files") => {
+    const targetUrl = localUri ?? fileUrl;
+    if (!targetUrl) return;
 
-  // Save image to device photo library
-  const handleSaveToGallery = async () => {
-    const src = localUri ?? fileUrl;
-    if (!src) return;
     setIsSaving(true);
+    let uriToSave = targetUrl;
+
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission Required", "Please allow media access in Settings to save images.");
-        return;
-      }
-      // If we only have a remote URL, download first
-      let uriToSave = src;
       if (!localUri && fileUrl) {
-        const cached = await downloadAndCache(fileUrl, fileName ?? "image", setDownloadProgress);
+        const cached = await downloadAndCache(fileUrl, fileName ?? "file", setDownloadProgress);
         if (!cached) {
-          Alert.alert("Error", "Could not download image to save.");
+          Alert.alert("Error", "Could not download file.");
+          setIsSaving(false);
           return;
         }
         setLocalUri(cached);
         uriToSave = cached;
       }
-      await MediaLibrary.saveToLibraryAsync(uriToSave);
-      Alert.alert("Saved!", "Image saved to your photo library.");
+
+      if (type === "gallery" && (isImage || isVideo)) {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Required", "Please allow media access in Settings to save to gallery.");
+          setIsSaving(false);
+          return;
+        }
+        await MediaLibrary.saveToLibraryAsync(uriToSave);
+        Alert.alert("Saved!", "Saved to your device gallery.");
+      } else {
+        if (Platform.OS === "android") {
+          try {
+            const permissions = await FileSystemLegacy.StorageAccessFramework.requestDirectoryPermissionsAsync();
+            if (permissions.granted) {
+              const base64 = await FileSystemLegacy.readAsStringAsync(uriToSave, { encoding: FileSystemLegacy.EncodingType.Base64 });
+              const newUri = await FileSystemLegacy.StorageAccessFramework.createFileAsync(
+                permissions.directoryUri,
+                fileName || "file",
+                mimeType || "application/octet-stream"
+              );
+              await FileSystemLegacy.writeAsStringAsync(newUri, base64, { encoding: FileSystemLegacy.EncodingType.Base64 });
+              Alert.alert("Saved!", "File saved successfully.");
+              return;
+            } else {
+              return;
+            }
+          } catch (e: any) {
+            console.error("Android SAF error:", e);
+            Alert.alert("Error", "Could not save file to directory.");
+            return;
+          }
+        }
+
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (isAvailable) {
+          await Sharing.shareAsync(uriToSave, {
+            dialogTitle: `Save ${fileName || "file"}`,
+          });
+        } else {
+          Alert.alert("Unavailable", "Sharing/Saving is not available on this device.");
+        }
+      }
     } catch (err) {
-      Alert.alert("Error", "Could not save image.");
+      console.error(err);
+      Alert.alert("Error", "Could not save file.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const bubbleBase = `max-w-[85%] rounded-2xl overflow-hidden ${
-    isFromMe
+  const bubbleBase = `max-w-[85%] rounded-2xl overflow-hidden ${isFromMe
       ? "bg-primary rounded-br-sm"
       : "bg-surface-card rounded-bl-sm border border-surface-light"
-  }`;
+    }`;
 
   const textColor = isFromMe ? "text-surface-dark" : "text-foreground";
   const mutedColor = isFromMe ? "text-surface-dark/70" : "text-muted-foreground";
   const accentColor = isFromMe ? "#0D0D0F" : "#F4A261";
 
-  const src = localUri ?? fileUrl;
-
-  // ── Full-Screen Image Modal ─────────────────────────────────────────
+  // Full-Screen Image Modal 
   const FullScreenModal = () => (
     <Modal
       visible={fullScreenVisible}
@@ -148,7 +181,7 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
             {fileName}
           </Text>
           {/* Save button */}
-          <Pressable onPress={handleSaveToGallery} disabled={isSaving} hitSlop={12}>
+          <Pressable onPress={() => handleSaveFile("gallery")} disabled={isSaving} hitSlop={12}>
             {isSaving ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
@@ -181,7 +214,7 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
     </Modal>
   );
 
-  // ── Image preview ──────────────────────────────────────────────────
+  // Image preview 
   if (isImage) {
     return (
       <View className={`flex-row ${isFromMe ? "justify-end" : "justify-start"}`}>
@@ -213,7 +246,7 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
               {/* Footer: name + save */}
               <View className="px-2 py-1.5 flex-row items-center justify-between">
                 <Text className={`text-xs ${mutedColor} flex-1`} numberOfLines={1}>{fileName}</Text>
-                <Pressable onPress={handleSaveToGallery} disabled={isSaving} hitSlop={8}>
+                <Pressable onPress={() => handleSaveFile("gallery")} disabled={isSaving} hitSlop={8}>
                   {isSaving
                     ? <ActivityIndicator size="small" color={accentColor} />
                     : <Ionicons name="download-outline" size={16} color={accentColor} />}
@@ -236,24 +269,25 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
     );
   }
 
-  // ── Video player ────────────────────────────────────────────────────
+  // Video player 
   if (isVideo) {
     return (
       <View className={`flex-row ${isFromMe ? "justify-end" : "justify-start"}`}>
         <View className={bubbleBase}>
           {src ? (
             <>
-              <Video
-                source={{ uri: src }}
+              <VideoView
+                player={player}
                 style={{ width: SCREEN_WIDTH * 0.65, height: SCREEN_WIDTH * 0.42 }}
-                useNativeControls
-                resizeMode={ResizeMode.CONTAIN}
+                nativeControls={true}
               />
-              <View className="px-2 py-1.5 flex-row items-center justify-between">
+              <View className="px-2 py-1.5 flex-row items-center justify-between gap-2">
                 <Text className={`text-xs ${mutedColor} flex-1`} numberOfLines={1}>{fileName}</Text>
-                {fileSize != null && (
-                  <Text className={`text-xs ${mutedColor}`}>{formatFileSize(fileSize)}</Text>
-                )}
+                <Pressable onPress={() => handleSaveFile("files")} disabled={isSaving} hitSlop={8}>
+                  {isSaving
+                    ? <ActivityIndicator size="small" color={accentColor} />
+                    : <Ionicons name="download-outline" size={16} color={accentColor} />}
+                </Pressable>
               </View>
             </>
           ) : (
@@ -272,7 +306,7 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
     );
   }
 
-  // ── Audio ────────────────────────────────────────────────────────────
+  // Audio player 
   if (isAudio) {
     return (
       <View className={`flex-row ${isFromMe ? "justify-end" : "justify-start"}`}>
@@ -287,9 +321,22 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
                 <Text className={`text-xs ${mutedColor}`}>{formatFileSize(fileSize)}</Text>
               )}
             </View>
+            {/* Header Download icon for audio */}
+            {src && (
+              <Pressable onPress={() => handleSaveFile("files")} disabled={isSaving} hitSlop={8}>
+                {isSaving
+                  ? <ActivityIndicator size="small" color={accentColor} />
+                  : <Ionicons name="download-outline" size={18} color={accentColor} />}
+              </Pressable>
+            )}
           </View>
           {src ? (
-            <Video source={{ uri: src }} style={{ width: 0, height: 0 }} useNativeControls />
+            <VideoView
+              player={player}
+              style={{ width: "100%", height: 50, marginTop: 4 }}
+              nativeControls={true}
+              contentFit="contain"
+            />
           ) : (
             <DownloadCard
               downloadState={downloadState}
@@ -305,13 +352,13 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
     );
   }
 
-  // ── Document / other ─────────────────────────────────────────────────
+  // Document / other 
   return (
     <View className={`flex-row ${isFromMe ? "justify-end" : "justify-start"}`}>
       <Pressable
         className={`${bubbleBase} px-3 py-2.5`}
         style={{ width: SCREEN_WIDTH * 0.65 }}
-        onPress={localUri ? handleOpenExternal : undefined}
+        onPress={() => localUri ? handleSaveFile("files") : handleDownload()}
       >
         <View className="flex-row items-center gap-3">
           <View className="w-10 h-10 rounded-xl bg-black/10 items-center justify-center">
@@ -325,16 +372,25 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
               <Text className={`text-xs ${mutedColor}`}>{formatFileSize(fileSize)}</Text>
             )}
           </View>
+          {/* Universal Download Action */}
+          {src && (
+            <Pressable onPress={() => handleSaveFile("files")} disabled={isSaving} hitSlop={12}>
+              {isSaving
+                ? <ActivityIndicator size="small" color={accentColor} />
+                : <Ionicons name="download-outline" size={20} color={accentColor} />}
+            </Pressable>
+          )}
         </View>
         <View className="mt-2">
           <DownloadCard
             downloadState={downloadState}
             downloadProgress={downloadProgress}
             isFromMe={isFromMe}
-            onDownload={localUri ? handleOpenExternal : handleDownload}
+            onDownload={localUri ? () => handleSaveFile("files") : handleDownload}
             textColor={textColor}
             compact
             alreadyDownloaded={!!localUri}
+            actionText={localUri ? "Save file" : "Tap to download"}
           />
         </View>
       </Pressable>
@@ -342,7 +398,7 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
   );
 }
 
-// ── Shared download / progress card ──────────────────────────────────
+// Shared download / progress card 
 interface DownloadCardProps {
   downloadState: DownloadState;
   downloadProgress: number;
@@ -351,6 +407,7 @@ interface DownloadCardProps {
   textColor: string;
   compact?: boolean;
   alreadyDownloaded?: boolean;
+  actionText?: string;
 }
 
 function DownloadCard({
@@ -361,6 +418,7 @@ function DownloadCard({
   textColor,
   compact,
   alreadyDownloaded,
+  actionText,
 }: DownloadCardProps) {
   const accentColor = isFromMe ? "#0D0D0F" : "#F4A261";
 
@@ -401,9 +459,7 @@ function DownloadCard({
       <Text className={`text-xs font-medium ${textColor}`}>
         {downloadState === "error"
           ? "Retry"
-          : alreadyDownloaded
-          ? "Open"
-          : "Tap to download"}
+          : actionText ?? (alreadyDownloaded ? "Open" : "Tap to download")}
       </Text>
     </Pressable>
   );

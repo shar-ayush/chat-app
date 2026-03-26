@@ -42,7 +42,8 @@
       ],
       "expo-sqlite",
       "expo-document-picker",
-      "expo-media-library"
+      "expo-media-library",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

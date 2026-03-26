@@ -15,11 +15,13 @@
   "type": "module",
   "dependencies": {
     "@clerk/express": "^1.7.67",
+    "cloudinary": "^2.9.0",
     "cors": "^2.8.6",
     "cron": "^4.4.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "mongoose": "^9.1.5",
+    "multer": "^2.1.1",
     "nodemon": "^3.1.11",
     "socket.io": "^4.8.3",
     "tweetnacl": "^1.0.3",

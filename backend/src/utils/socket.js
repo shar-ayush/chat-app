@@ -63,9 +63,18 @@ export const initializeSocket = (httpServer) => {
 
     socket.on("send-message", async (data) => {
       try {
-        const { localId, chatId, ciphertext, nonce, senderCiphertext, senderNonce, senderPublicKey } = data;
+        const { localId, chatId, ciphertext, nonce, senderCiphertext, senderNonce, senderPublicKey, filePayload } = data;
 
-        if (!localId || !ciphertext || !nonce || !senderPublicKey) {
+        // Validate: must have localId, and either encrypted payload OR file payload
+        if (!localId) {
+          socket.emit("socket-error", { message: "Missing localId", localId });
+          return;
+        }
+
+        const isFileMessage = !!filePayload;
+        const isTextMessage = !isFileMessage;
+
+        if (isTextMessage && (!ciphertext || !nonce || !senderPublicKey)) {
           socket.emit("socket-error", { message: "Missing encrypted payload or localId", localId });
           return;
         }
@@ -86,19 +95,40 @@ export const initializeSocket = (httpServer) => {
           return;
         }
 
-        const message = new Message({
-          localId,
-          chat: chatId,
-          sender: userId,
-          text: "",
-          ciphertext,
-          nonce,
-          senderCiphertext: senderCiphertext ?? null,
-          senderNonce: senderNonce ?? null,
-          senderPublicKey,
-          readBy: [userId],
-          createdAt: new Date()
-        });
+        let message;
+
+        if (isFileMessage) {
+          // File message — metadata only, no re-upload
+          message = new Message({
+            localId,
+            chat: chatId,
+            sender: userId,
+            type: "file",
+            text: "",
+            fileUrl: filePayload.fileUrl,
+            fileName: filePayload.fileName,
+            mimeType: filePayload.mimeType,
+            fileSize: filePayload.fileSize,
+            readBy: [userId],
+            createdAt: new Date(),
+          });
+        } else {
+          // Encrypted text message (existing path)
+          message = new Message({
+            localId,
+            chat: chatId,
+            sender: userId,
+            type: "text",
+            text: "",
+            ciphertext,
+            nonce,
+            senderCiphertext: senderCiphertext ?? null,
+            senderNonce: senderNonce ?? null,
+            senderPublicKey,
+            readBy: [userId],
+            createdAt: new Date(),
+          });
+        }
 
         // Add to buffer for delayed DB insert
         addMessageToBuffer(message);

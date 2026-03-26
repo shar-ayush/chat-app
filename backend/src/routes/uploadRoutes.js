@@ -5,7 +5,7 @@ import { uploadFile } from "../controllers/uploadController.js";
 
 const router = express.Router();
 
-// Store file temporarily on disk; we delete it after Cloudinary upload
+// Store file temporarily on disk
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, "uploads/");
@@ -18,7 +18,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB hard limit (multer rejects early)
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB hard limit 
 });
 
 // POST /api/upload — requires valid Clerk auth token

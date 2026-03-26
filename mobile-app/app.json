@@ -40,7 +40,10 @@
           }
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-document-picker",
+      "expo-media-library",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

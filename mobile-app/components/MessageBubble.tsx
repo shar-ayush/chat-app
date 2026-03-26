@@ -1,7 +1,13 @@
 import { Message } from "@/types";
 import { View, Text } from "react-native";
+import FileMessageBubble from "./FileMessageBubble";
 
 function MessageBubble({ message, isFromMe }: { message: Message; isFromMe: boolean }) {
+  // Dispatch file messages to the dedicated renderer
+  if (message.type === "file") {
+    return <FileMessageBubble message={message} isFromMe={isFromMe} />;
+  }
+
   return (
     <View className={`flex-row ${isFromMe ? "justify-end" : "justify-start"}`}>
       <View

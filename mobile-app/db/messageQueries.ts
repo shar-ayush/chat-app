@@ -6,11 +6,18 @@ export interface LocalMessage {
   id: string; // local UI UUID
   chat_id: string;
   sender_id: string;
+  type?: 'text' | 'file';
   cipher_text: string | null;
   nonce: string | null;
   sender_cipher_text: string | null;
   sender_nonce: string | null;
   sender_public_key: string | null;
+  // File fields
+  file_url?: string | null;
+  file_name?: string | null;
+  mime_type?: string | null;
+  file_size?: number | null;
+  local_uri?: string | null;
   status: MessageStatus;
   created_at: number; // timestamp
   server_id: string | null; // MongoDB _id
@@ -23,16 +30,36 @@ export const insertMessage = async (msg: LocalMessage) => {
   const safeCreatedAt = (typeof msg.created_at !== 'number' || Number.isNaN(msg.created_at)) ? Date.now() : msg.created_at;
 
   await db.runAsync(
-    "INSERT INTO messages (id, chat_id, sender_id, cipher_text, nonce, sender_cipher_text, sender_nonce, sender_public_key, status, created_at, server_id, retry_count) VALUES ($id, $chat_id, $sender_id, $cipher_text, $nonce, $sender_cipher_text, $sender_nonce, $sender_public_key, $status, $created_at, $server_id, $retry_count) ON CONFLICT(id) DO UPDATE SET status = excluded.status, server_id = excluded.server_id, retry_count = excluded.retry_count",
+    `INSERT INTO messages (
+       id, chat_id, sender_id, type,
+       cipher_text, nonce, sender_cipher_text, sender_nonce, sender_public_key,
+       file_url, file_name, mime_type, file_size, local_uri,
+       status, created_at, server_id, retry_count
+     ) VALUES (
+       $id, $chat_id, $sender_id, $type,
+       $cipher_text, $nonce, $sender_cipher_text, $sender_nonce, $sender_public_key,
+       $file_url, $file_name, $mime_type, $file_size, $local_uri,
+       $status, $created_at, $server_id, $retry_count
+     ) ON CONFLICT(id) DO UPDATE SET
+       status = excluded.status,
+       server_id = excluded.server_id,
+       retry_count = excluded.retry_count,
+       local_uri = excluded.local_uri`,
     {
       $id: msg.id || "temp-id-fallback",
       $chat_id: msg.chat_id || "unknown_chat",
       $sender_id: msg.sender_id || "unknown_sender",
+      $type: msg.type ?? 'text',
       $cipher_text: msg.cipher_text ?? "",
       $nonce: msg.nonce ?? "",
       $sender_cipher_text: msg.sender_cipher_text ?? "",
       $sender_nonce: msg.sender_nonce ?? "",
       $sender_public_key: msg.sender_public_key ?? "",
+      $file_url: msg.file_url ?? null,
+      $file_name: msg.file_name ?? null,
+      $mime_type: msg.mime_type ?? null,
+      $file_size: msg.file_size ?? null,
+      $local_uri: msg.local_uri ?? null,
       $status: msg.status || 'pending',
       $created_at: safeCreatedAt,
       $server_id: msg.server_id ?? "",

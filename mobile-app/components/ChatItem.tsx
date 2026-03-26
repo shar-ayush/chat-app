@@ -57,7 +57,9 @@ const ChatItem = ({ chat, onPress }: { chat: Chat; onPress: () => void }) => {
               className={`text-sm flex-1 mr-3 ${hasUnread ? "text-foreground font-medium" : "text-subtle-foreground"}`}
               numberOfLines={1}
             >
-              {chat.lastMessage?.text || "No messages yet"}
+              {chat.lastMessage
+                ? chat.lastMessage.text || `📎 ${(chat.lastMessage as any).fileName ?? "File"}`
+                : "No messages yet"}
             </Text>
           )}
         </View>

@@ -1,15 +1,18 @@
 import EmptyUI from "@/components/EmptyUI";
 import MessageBubble from "@/components/MessageBubble";
+import UploadProgressBar from "@/components/UploadProgressBar";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useMessages } from "@/hooks/useMessages";
 import { usePublicKey } from "@/hooks/usePublicKey";
 import { useSocketStore } from "@/lib/socket";
 import { useChatApi } from "@/lib/chatApi";
 import { initializeKeyPair } from "@/crypto/keyManager";
+import { uploadFile } from "@/lib/uploadService";
 import { MessageSender } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
+import * as DocumentPicker from "expo-document-picker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -27,12 +30,16 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/clerk-expo";
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
 type ChatParams = {
   id: string;
   participantId: string;
   name: string;
   avatar: string;
 };
+
+type UploadStatus = "idle" | "uploading" | "success" | "failed";
 
 const ChatDetailScreen = () => {
   const { id: chatId, avatar, name, participantId } = useLocalSearchParams<ChatParams>();
@@ -41,13 +48,24 @@ const ChatDetailScreen = () => {
   const [isSending, setIsSending] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
+  // File upload state
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>("idle");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedFile, setSelectedFile] = useState<{
+    uri: string;
+    name: string;
+    mimeType: string;
+    size: number;
+  } | null>(null);
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
+
   const { getToken } = useAuth();
   const { data: currentUser } = useCurrentUser();
   const { data: messages, isLoading } = useMessages(chatId);
   const { data: recipientPublicKey, isLoading: isLoadingPublicKey } = usePublicKey(participantId);
   const queryClient = useQueryClient();
 
-  const { joinChat, leaveChat, sendMessage, sendTyping, isConnected, onlineUsers, typingUsers } =
+  const { joinChat, leaveChat, sendMessage, sendFileMessage, sendTyping, isConnected, onlineUsers, typingUsers } =
     useSocketStore();
   const { markMessagesAsRead } = useChatApi();
 
@@ -55,6 +73,9 @@ const ChatDetailScreen = () => {
   const isTyping = typingUsers.get(chatId) === participantId;
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isUploading = uploadStatus === "uploading";
+  const isSendDisabled = (!messageText.trim() && !selectedFile) || isSending || isUploading;
 
   // Initialize E2E keypair once when user is available
   useEffect(() => {
@@ -72,7 +93,6 @@ const ChatDetailScreen = () => {
   useEffect(() => {
     if (chatId && isConnected) {
       joinChat(chatId);
-      // Mark messages as read when entering the chat
       markMessagesAsRead(chatId, queryClient).catch((err) => {
         console.log("Failed to mark as read:", err.message);
       });
@@ -98,21 +118,17 @@ const ChatDetailScreen = () => {
 
       if (!isConnected || !chatId) return;
 
-      // send typing start
       if (text.length > 0) {
         sendTyping(chatId, true);
 
-        // clear existing timeout
         if (typingTimeoutRef.current) {
           clearTimeout(typingTimeoutRef.current);
         }
 
-        // stop typing after 2 seconds of no input
         typingTimeoutRef.current = setTimeout(() => {
           sendTyping(chatId, false);
         }, 2000);
       } else {
-        // text cleared, stop typing
         if (typingTimeoutRef.current) {
           clearTimeout(typingTimeoutRef.current);
         }
@@ -122,6 +138,114 @@ const ChatDetailScreen = () => {
     [chatId, isConnected, sendTyping]
   );
 
+  // ── File Picker ────────────────────────────────────────────────────
+  const handlePickFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      const asset = result.assets[0];
+      const fileSize = asset.size ?? 0;
+
+      if (fileSize > MAX_FILE_SIZE) {
+        Alert.alert(
+          "File Too Large",
+          `Maximum file size is 10MB. This file is ${(fileSize / (1024 * 1024)).toFixed(1)}MB.`
+        );
+        return;
+      }
+
+      setSelectedFile({
+        uri: asset.uri,
+        name: asset.name,
+        mimeType: asset.mimeType ?? "application/octet-stream",
+        size: fileSize,
+      });
+      setUploadStatus("idle");
+      setUploadProgress(0);
+
+      // Auto-start upload
+      await startUpload({
+        uri: asset.uri,
+        name: asset.name,
+        mimeType: asset.mimeType ?? "application/octet-stream",
+        size: fileSize,
+      });
+    } catch (err) {
+      console.error("Document picker error:", err);
+      Alert.alert("Error", "Could not open file picker.");
+    }
+  };
+
+  const startUpload = async (file: {
+    uri: string;
+    name: string;
+    mimeType: string;
+    size: number;
+  }) => {
+    const token = await getToken();
+    if (!token || !currentUser) return;
+
+    setUploadStatus("uploading");
+    setUploadProgress(0);
+
+    try {
+      const result = await uploadFile(file.uri, file.name, file.mimeType, token, (p) => {
+        setUploadProgress(p);
+      });
+
+      setUploadStatus("success");
+
+      // Emit file message via socket
+      await sendFileMessage(
+        chatId,
+        {
+          fileUrl: result.url,
+          fileName: result.fileName,
+          mimeType: result.mimeType,
+          fileSize: result.bytes,
+        },
+        {
+          _id: currentUser._id,
+          name: currentUser.name,
+          email: currentUser.email,
+          avatar: currentUser.avatar,
+        }
+      );
+
+      // Clear upload state after brief success display
+      setTimeout(() => {
+        setSelectedFile(null);
+        setUploadStatus("idle");
+        setUploadProgress(0);
+      }, 1500);
+
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    } catch (err: any) {
+      console.error("Upload failed:", err);
+      setUploadStatus("failed");
+      Alert.alert("Upload Failed", err?.message ?? "Could not upload file. Please try again.");
+    }
+  };
+
+  const handleRetryUpload = () => {
+    if (selectedFile) {
+      startUpload(selectedFile);
+    }
+  };
+
+  const handleCancelUpload = () => {
+    xhrRef.current?.abort();
+    setSelectedFile(null);
+    setUploadStatus("idle");
+    setUploadProgress(0);
+  };
+
+  // ── Send text message ──────────────────────────────────────────────
   const handleSend = async () => {
     if (!messageText.trim() || isSending || !currentUser) return;
 
@@ -130,7 +254,6 @@ const ChatDetailScreen = () => {
       return;
     }
 
-    // stop typing indicator
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
@@ -182,8 +305,6 @@ const ChatDetailScreen = () => {
         </View>
       </View>
 
-      {/* Message + Keyboard input */}
-
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -219,11 +340,31 @@ const ChatDetailScreen = () => {
             </ScrollView>
           )}
 
+          {/* Upload progress bar (shown above input) */}
+          {uploadStatus !== "idle" && selectedFile && (
+            <UploadProgressBar
+              fileName={selectedFile.name}
+              progress={uploadProgress}
+              status={uploadStatus}
+              onCancel={handleCancelUpload}
+              onRetry={handleRetryUpload}
+            />
+          )}
+
           {/* Input bar */}
           <View className="px-3 pb-3 pt-2 bg-surface border-t border-surface-light">
             <View className="flex-row items-center bg-surface-card rounded-3xl px-3 py-1.5 gap-2">
-              <Pressable className="w-8 h-8 rounded-full items-center justify-center">
-                <Ionicons name="add" size={22} color="#F4A261" />
+              {/* File attach button */}
+              <Pressable
+                className="w-8 h-8 rounded-full items-center justify-center"
+                onPress={handlePickFile}
+                disabled={isUploading}
+              >
+                <Ionicons
+                  name={isUploading ? "cloud-upload" : "add"}
+                  size={22}
+                  color={isUploading ? "#6B6B70" : "#F4A261"}
+                />
               </Pressable>
 
               <TextInput
@@ -235,18 +376,18 @@ const ChatDetailScreen = () => {
                 value={messageText}
                 onChangeText={handleTyping}
                 onSubmitEditing={handleSend}
-                editable={!isSending}
+                editable={!isSending && !isUploading}
               />
 
               <Pressable
                 className="w-8 h-8 rounded-full items-center justify-center bg-primary"
                 onPress={handleSend}
-                disabled={!messageText.trim() || isSending}
+                disabled={isSendDisabled}
               >
                 {isSending ? (
                   <ActivityIndicator size="small" color="#0D0D0F" />
                 ) : (
-                  <Ionicons name="send" size={18} color="#0D0D0F" />
+                  <Ionicons name="send" size={18} color={isSendDisabled ? "#4A4A50" : "#0D0D0F"} />
                 )}
               </Pressable>
             </View>

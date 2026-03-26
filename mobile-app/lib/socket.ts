@@ -9,8 +9,8 @@ import { triggerSync } from "./syncEngine";
 import { getDb } from "../db/database";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// const SOCKET_URL = "https://chat-app-muyj.onrender.com";
-export const SOCKET_URL = "http://172.16.216.225:3000";
+export const SOCKET_URL = "https://chat-app-muyj.onrender.com";
+// export const SOCKET_URL = "http://172.16.216.225:3000";
 
 interface SocketState {
   socket: Socket | null;

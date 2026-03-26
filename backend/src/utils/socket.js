@@ -5,6 +5,7 @@ import { Message } from "../models/Message.js";
 import { Chat } from "../models/Chat.js";
 import { User } from "../models/User.js";
 import 'dotenv/config'
+import { addMessageToBuffer } from "./messageBuffer.js";
 
 export const onlineUsers = new Map();
 
@@ -15,10 +16,14 @@ export const initializeSocket = (httpServer) => {
     process.env.FRONTEND_URL, // production
   ].filter(Boolean);
 
-  const io = new SocketServer(httpServer, { cors: { origin: allowedOrigins } });
+  const io = new SocketServer(httpServer, {
+    cors: { origin: allowedOrigins },
+    pingInterval: 10000, // Send ping every 10 seconds (default 25s)
+    pingTimeout: 5000,   // Disconnect if no pong in 5 seconds (default 20s)
+  });
 
   io.use(async (socket, next) => {
-    const token = socket.handshake.auth.token; 
+    const token = socket.handshake.auth.token;
     if (!token) return next(new Error("Authentication error"));
 
     try {
@@ -67,8 +72,8 @@ export const initializeSocket = (httpServer) => {
 
         const existingMessage = await Message.findOne({ localId });
         if (existingMessage) {
-           socket.emit("message_ack", { localId, serverId: existingMessage._id });
-           return;
+          socket.emit("message_ack", { localId, serverId: existingMessage._id });
+          return;
         }
 
         const chat = await Chat.findOne({
@@ -81,23 +86,24 @@ export const initializeSocket = (httpServer) => {
           return;
         }
 
-        const message = await Message.create({
+        const message = new Message({
           localId,
           chat: chatId,
           sender: userId,
-          text: "", 
+          text: "",
           ciphertext,
           nonce,
           senderCiphertext: senderCiphertext ?? null,
           senderNonce: senderNonce ?? null,
           senderPublicKey,
-          readBy: [userId] // Sender automatically reads their own message
+          readBy: [userId],
+          createdAt: new Date()
         });
 
-        chat.lastMessage = message._id;
-        chat.lastMessageAt = new Date();
-        await chat.save();
+        // Add to buffer for delayed DB insert
+        addMessageToBuffer(message);
 
+        // Populate sender so the client receives the standard object format
         await message.populate("sender", "name avatar");
 
         socket.emit("message_ack", { localId: localId, serverId: message._id });

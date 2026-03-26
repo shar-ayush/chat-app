@@ -37,6 +37,7 @@ export const useChats = () => {
       );
     },
     enabled: !!currentUser,
+    staleTime: 60000, // 60 seconds to prevent background refetches from overwriting optimistic UI
   });
 };
 

@@ -1,6 +1,7 @@
 import { Chat } from "../models/Chat.js";
 import { Message } from "../models/Message.js";
 import { Types } from "mongoose";
+import { getBufferedMessages } from "../utils/messageBuffer.js";
 
 export async function getChats(req, res, next) {
   try {
@@ -15,18 +16,28 @@ export async function getChats(req, res, next) {
       chats.map(async (chat) => {
         const otherParticipant = chat.participants.find((p) => p._id.toString() !== userId);
         
-        // Count unread messages (messages not read by current user and not sent by current user)
         const unreadCount = await Message.countDocuments({
           chat: chat._id,
           sender: { $ne: userId },
           readBy: { $ne: userId }
         });
 
+        // Merge buffered messages into the chat object
+        let activeLastMessage = chat.lastMessage;
+        let activeLastMessageAt = chat.lastMessageAt;
+        
+        const buffered = getBufferedMessages(chat._id.toString());
+        if (buffered.length > 0) {
+          const latestBuffered = buffered[buffered.length - 1];
+          activeLastMessage = latestBuffered;
+          activeLastMessageAt = latestBuffered.createdAt;
+        }
+
         return {
           _id: chat._id,
           participant: otherParticipant ?? null,
-          lastMessage: chat.lastMessage,
-          lastMessageAt: chat.lastMessageAt,
+          lastMessage: activeLastMessage,
+          lastMessageAt: activeLastMessageAt,
           createdAt: chat.createdAt,
           unreadCount
         };
@@ -74,11 +85,21 @@ export async function getOrCreateChat(req, res, next) {
 
     const otherParticipant = chat.participants.find((p) => p._id.toString() !== userId);
 
+    let activeLastMessage = chat.lastMessage;
+    let activeLastMessageAt = chat.lastMessageAt;
+        
+    const buffered = getBufferedMessages(chat._id.toString());
+    if (buffered.length > 0) {
+      const latestBuffered = buffered[buffered.length - 1];
+      activeLastMessage = latestBuffered;
+      activeLastMessageAt = latestBuffered.createdAt;
+    }
+
     res.json({
       _id: chat._id,
       participant: otherParticipant ?? null,
-      lastMessage: chat.lastMessage,
-      lastMessageAt: chat.lastMessageAt,
+      lastMessage: activeLastMessage,
+      lastMessageAt: activeLastMessageAt,
       createdAt: chat.createdAt,
     });
   } catch (error) {
@@ -118,9 +139,28 @@ export async function markMessagesAsRead(req, res, next) {
       }
     );
 
+    // ALSO mutate any messages currently sitting in the delay buffer
+    const buffered = getBufferedMessages(chatId.toString());
+    let bufferUpdatedCount = 0;
+    if (buffered && buffered.length > 0) {
+      buffered.forEach(msg => {
+        // Resolve sender ID safely whether populated or not
+        const senderId = typeof msg.sender === 'object' && msg.sender._id 
+          ? msg.sender._id.toString() 
+          : msg.sender.toString();
+          
+        const isRead = msg.readBy.some(id => id.toString() === userId);
+        
+        if (senderId !== userId && !isRead) {
+          msg.readBy.push(userId);
+          bufferUpdatedCount++;
+        }
+      });
+    }
+
     res.json({ 
       message: "Messages marked as read",
-      markedCount: result.modifiedCount 
+      markedCount: result.modifiedCount + bufferUpdatedCount
     });
   } catch (error) {
     res.status(500);

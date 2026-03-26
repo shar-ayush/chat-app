@@ -3,6 +3,7 @@ import { connectDB } from "./src/config/database.js";
 import { createServer } from "http";
 import { initializeSocket } from "./src/utils/socket.js";
 import job from "./src/scripts/cron.js"
+import { flushAllOnShutdown } from "./src/utils/messageBuffer.js";
 
 import 'dotenv/config'
 
@@ -24,3 +25,12 @@ connectDB()
     console.error("Failed to start server:", error);
     process.exit(1);
   });
+
+const shutdown = async () => {
+  console.log("Shutting down gracefully...");
+  await flushAllOnShutdown();
+  process.exit(0);
+};
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

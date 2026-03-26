@@ -60,7 +60,11 @@ const ChatDetailScreen = () => {
   useEffect(() => {
     if (!currentUser) return;
     getToken().then((token) => {
-      if (token) initializeKeyPair(currentUser._id, token).catch(console.warn);
+      if (token) {
+        initializeKeyPair(currentUser._id, token).catch((err) => {
+          console.log("Key initialization deferred (offline):", err.message);
+        });
+      }
     });
   }, [currentUser, getToken]);
 
@@ -69,7 +73,9 @@ const ChatDetailScreen = () => {
     if (chatId && isConnected) {
       joinChat(chatId);
       // Mark messages as read when entering the chat
-      markMessagesAsRead(chatId, queryClient).catch(console.error);
+      markMessagesAsRead(chatId, queryClient).catch((err) => {
+        console.log("Failed to mark as read:", err.message);
+      });
     }
 
     return () => {
@@ -116,7 +122,7 @@ const ChatDetailScreen = () => {
     [chatId, isConnected, sendTyping]
   );
 
-  const handleSend =  async() => {
+  const handleSend = async () => {
     if (!messageText.trim() || isSending || !currentUser) return;
 
     if (!recipientPublicKey) {

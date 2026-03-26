@@ -2,9 +2,6 @@ import * as FileSystem from "expo-file-system/legacy";
 
 const CACHE_DIR = FileSystem.documentDirectory + "file_cache/";
 
-/**
- * Ensure the cache directory exists
- */
 const ensureCacheDir = async () => {
   const info = await FileSystem.getInfoAsync(CACHE_DIR);
   if (!info.exists) {
@@ -12,10 +9,7 @@ const ensureCacheDir = async () => {
   }
 };
 
-/**
- * Build a deterministic local filename from the remote URL.
- * Uses a hash-like approach (timestamp embedded in the URL + original name) to avoid collisions.
- */
+
 const buildLocalPath = (fileUrl: string, fileName: string): string => {
   // Extract a stable ID from the URL (last segment of Cloudinary path)
   const urlSegment = fileUrl.split("/").pop()?.split("?")[0] ?? Date.now().toString();
@@ -23,9 +17,9 @@ const buildLocalPath = (fileUrl: string, fileName: string): string => {
   return CACHE_DIR + urlSegment + "_" + safeName;
 };
 
-/**
- * Returns the local cached URI for a file if it already exists, otherwise null.
- */
+
+ // Returns the local cached URI for a file if it already exists, otherwise null.
+
 export const getCachedFile = async (fileUrl: string, fileName: string): Promise<string | null> => {
   try {
     const localPath = buildLocalPath(fileUrl, fileName);
@@ -36,10 +30,8 @@ export const getCachedFile = async (fileUrl: string, fileName: string): Promise<
   }
 };
 
-/**
- * Downloads a file and caches it locally.
- * Returns the local URI on success, or null on failure.
- */
+
+ // Downloads a file and caches it locally. Returns the local URI on success, or null on failure.
 export const downloadAndCache = async (
   fileUrl: string,
   fileName: string,
@@ -80,9 +72,6 @@ export const downloadAndCache = async (
   }
 };
 
-/**
- * Format bytes to a human-readable string
- */
 export const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

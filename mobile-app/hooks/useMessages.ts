@@ -38,6 +38,11 @@ export const useMessages = (chatId: string) => {
             }
           }
 
+          let parsedDeletedFor;
+          if (msg.deleted_for) {
+            try { parsedDeletedFor = JSON.parse(msg.deleted_for); } catch {}
+          }
+
           const messageObj: Message = {
             _id: msg.server_id || msg.id,
             chat: msg.chat_id,
@@ -53,6 +58,9 @@ export const useMessages = (chatId: string) => {
             createdAt: new Date(msg.created_at).toISOString(),
             updatedAt: new Date(msg.created_at).toISOString(),
             status: msg.status,
+            isDeleted: msg.is_deleted === 1,
+            deletedAt: msg.deleted_at ? new Date(msg.deleted_at).toISOString() : undefined,
+            deletedFor: Array.isArray(parsedDeletedFor) ? parsedDeletedFor : undefined,
           };
 
           return messageObj;

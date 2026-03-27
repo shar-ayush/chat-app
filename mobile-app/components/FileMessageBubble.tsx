@@ -175,7 +175,7 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
     }
   };
 
-  const bubbleBase = `max-w-[85%] rounded-2xl overflow-hidden ${isFromMe
+  const bubbleBase = `max-w-[85%] rounded-2xl overflow-hidden justify-center items-center ${isFromMe
     ? "bg-primary rounded-br-sm"
     : "bg-surface-card rounded-bl-sm border border-surface-light"
     }`;
@@ -308,7 +308,7 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
         <View className={bubbleBase}>
           {src ? (
             <>
-              <View>
+              <View className="justify-center">
                 <VideoView
                   ref={videoViewRef}
                   player={player}
@@ -428,7 +428,7 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
               }}>
                 <Ionicons name={isPlaying ? 'pause-circle' : 'play-circle'} size={36} color={accentColor} />
               </Pressable>
-              
+
               <View style={{ width: 0, height: 0, overflow: 'hidden' }}>
                 <VideoView player={player} style={{ width: 36, height: 36 }} nativeControls={false} />
               </View>

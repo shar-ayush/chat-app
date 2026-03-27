@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -37,6 +37,8 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [fullScreenVisible, setFullScreenVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackProgress, setPlaybackProgress] = useState(0);
 
   const isImage = mimeType?.startsWith("image/");
   const isVideo = mimeType?.startsWith("video/");
@@ -44,9 +46,39 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
 
   const src = localUri ?? fileUrl;
 
-  const player = useVideoPlayer(src ?? "", (player) => {
+  const player = useVideoPlayer(src || null, (player) => {
     player.loop = false;
   });
+
+  const videoViewRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!player) return;
+    try {
+      const subscription = player.addListener('playingChange', (event: any) => {
+        setIsPlaying(event.isPlaying);
+      });
+      return () => {
+        subscription.remove();
+      };
+    } catch (err) {
+      console.warn("addListener not supported on this video player version", err);
+    }
+  }, [player]);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (isPlaying && player) {
+      interval = setInterval(() => {
+        if (player.duration && player.duration > 0) {
+          setPlaybackProgress(player.currentTime / player.duration);
+        }
+      }, 150);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isPlaying, player]);
 
   useEffect(() => {
     if (localUri || !fileUrl || !fileName) return;
@@ -276,11 +308,57 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
         <View className={bubbleBase}>
           {src ? (
             <>
-              <VideoView
-                player={player}
-                style={{ width: SCREEN_WIDTH * 0.65, height: SCREEN_WIDTH * 0.42 }}
-                nativeControls={true}
-              />
+              <View>
+                <VideoView
+                  ref={videoViewRef}
+                  player={player}
+                  style={{ width: SCREEN_WIDTH * 0.65, height: SCREEN_WIDTH * 0.42 }}
+                  nativeControls={false}
+                />
+                <Pressable
+                  onPress={() => {
+                    try {
+                      if (isPlaying || player.playing) {
+                        player.pause();
+                        setIsPlaying(false);
+                      } else {
+                        player.play();
+                        setIsPlaying(true);
+                        // Check if player has an error
+                        if ((player as any).status === 'error' || (player as any).error) {
+                          Alert.alert("Playback Error", JSON.stringify((player as any).error || "Unknown player error"));
+                        }
+                      }
+                    } catch (e: any) {
+                      Alert.alert("Play Exception", e.message || String(e));
+                    }
+                  }}
+                  style={{
+                    position: "absolute",
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    justifyContent: "center", alignItems: "center",
+                    backgroundColor: isPlaying ? "transparent" : "rgba(0,0,0,0.2)"
+                  }}
+                >
+                  {!isPlaying && (
+                    <Ionicons name="play-circle" size={48} color="#fff" style={{ opacity: 0.8 }} />
+                  )}
+                </Pressable>
+                <Pressable
+                  onPress={() => videoViewRef.current?.enterFullscreen()}
+                  style={{
+                    position: "absolute",
+                    bottom: 6,
+                    right: 6,
+                    backgroundColor: "rgba(0,0,0,0.45)",
+                    borderRadius: 12,
+                    padding: 4,
+                  }}
+                  hitSlop={8}
+                >
+                  <Ionicons name="expand-outline" size={14} color="#fff" />
+                </Pressable>
+              </View>
               <View className="px-2 py-1.5 flex-row items-center justify-between gap-2">
                 <Text className={`text-xs ${mutedColor} flex-1`} numberOfLines={1}>{fileName}</Text>
                 <Pressable onPress={() => handleSaveFile("files")} disabled={isSaving} hitSlop={8}>
@@ -331,12 +409,39 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
             )}
           </View>
           {src ? (
-            <VideoView
-              player={player}
-              style={{ width: "100%", height: 50, marginTop: 4 }}
-              nativeControls={true}
-              contentFit="contain"
-            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isFromMe ? 'rgba(0,0,0,0.05)' : 'rgba(0,0,0,0.03)', borderRadius: 12, padding: 8, marginTop: 4 }}>
+              <Pressable onPress={() => {
+                try {
+                  if (isPlaying || player.playing) {
+                    player.pause();
+                    setIsPlaying(false);
+                  } else {
+                    player.play();
+                    setIsPlaying(true);
+                    if ((player as any).status === 'error' || (player as any).error) {
+                      Alert.alert("Playback Error", JSON.stringify((player as any).error || "Unknown error"));
+                    }
+                  }
+                } catch (e: any) {
+                  Alert.alert("Play Exception", e.message || String(e));
+                }
+              }}>
+                <Ionicons name={isPlaying ? 'pause-circle' : 'play-circle'} size={36} color={accentColor} />
+              </Pressable>
+              
+              <View style={{ width: 0, height: 0, overflow: 'hidden' }}>
+                <VideoView player={player} style={{ width: 36, height: 36 }} nativeControls={false} />
+              </View>
+
+              <View style={{ flex: 1, height: 4, backgroundColor: isFromMe ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.1)', marginLeft: 8, borderRadius: 2, overflow: 'hidden' }}>
+                <View style={{
+                  height: '100%',
+                  width: `${Math.min(100, Math.max(0, playbackProgress * 100))}%`,
+                  backgroundColor: accentColor,
+                  borderRadius: 2
+                }} />
+              </View>
+            </View>
           ) : (
             <DownloadCard
               downloadState={downloadState}

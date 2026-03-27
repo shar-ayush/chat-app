@@ -43,7 +43,17 @@ export const initDb = async () => {
       status TEXT NOT NULL, /* 'pending' | 'sending' | 'sent' | 'delivered' | 'failed' */
       created_at INTEGER NOT NULL,
       server_id TEXT,
-      retry_count INTEGER DEFAULT 0
+      retry_count INTEGER DEFAULT 0,
+      is_deleted INTEGER DEFAULT 0,
+      deleted_at INTEGER,
+      deleted_for TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS pending_actions (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      created_at INTEGER NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_messages_chat_status ON messages(chat_id, status);
@@ -60,6 +70,9 @@ export const initDb = async () => {
     ["mime_type", "TEXT"],
     ["file_size", "INTEGER"],
     ["local_uri", "TEXT"],
+    ["is_deleted", "INTEGER DEFAULT 0"],
+    ["deleted_at", "INTEGER"],
+    ["deleted_for", "TEXT"],
   ];
   for (const [col, def] of newColumns) {
     try {

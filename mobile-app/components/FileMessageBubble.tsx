@@ -144,8 +144,8 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
   };
 
   const bubbleBase = `max-w-[85%] rounded-2xl overflow-hidden ${isFromMe
-      ? "bg-primary rounded-br-sm"
-      : "bg-surface-card rounded-bl-sm border border-surface-light"
+    ? "bg-primary rounded-br-sm"
+    : "bg-surface-card rounded-bl-sm border border-surface-light"
     }`;
 
   const textColor = isFromMe ? "text-surface-dark" : "text-foreground";
@@ -357,14 +357,13 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
     <View className={`flex-row ${isFromMe ? "justify-end" : "justify-start"}`}>
       <Pressable
         className={`${bubbleBase} px-3 py-2.5`}
-        style={{ width: SCREEN_WIDTH * 0.65 }}
         onPress={() => localUri ? handleSaveFile("files") : handleDownload()}
       >
-        <View className="flex-row items-center gap-3">
-          <View className="w-10 h-10 rounded-xl bg-black/10 items-center justify-center">
+        <View className="flex-row items-center">
+          <View className="w-10 h-10 rounded-xl bg-black/10 shrink-0 items-center justify-center mr-3">
             <Ionicons name="document-text" size={22} color={accentColor} />
           </View>
-          <View className="flex-1">
+          <View className="w-[50%]">
             <Text className={`text-sm font-medium ${textColor}`} numberOfLines={2}>
               {fileName ?? "File"}
             </Text>
@@ -374,7 +373,7 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
           </View>
           {/* Universal Download Action */}
           {src && (
-            <Pressable onPress={() => handleSaveFile("files")} disabled={isSaving} hitSlop={12}>
+            <Pressable className="ml-3" onPress={() => handleSaveFile("files")} disabled={isSaving} hitSlop={12}>
               {isSaving
                 ? <ActivityIndicator size="small" color={accentColor} />
                 : <Ionicons name="download-outline" size={20} color={accentColor} />}

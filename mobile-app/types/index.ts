@@ -34,6 +34,9 @@ export interface Message {
   createdAt: string;
   updatedAt: string;
   status?: "pending" | "sending" | "sent" | "delivered" | "failed";
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedFor?: string[];
 }
 
 export interface ChatLastMessage {
@@ -47,6 +50,7 @@ export interface ChatLastMessage {
   senderNonce?: string;
   senderPublicKey?: string;
   createdAt: string;
+  isDeleted?: boolean;
 }
 
 export interface Chat {

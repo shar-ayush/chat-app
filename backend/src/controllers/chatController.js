@@ -33,6 +33,21 @@ export async function getChats(req, res, next) {
           activeLastMessageAt = latestBuffered.createdAt;
         }
 
+        // If the current activeLastMessage was deleted for the user, dig deeper into DB
+        if (activeLastMessage && activeLastMessage.deletedFor && activeLastMessage.deletedFor.includes(userId)) {
+          const fallbackMsg = await Message.findOne({
+            chat: chat._id,
+            deletedFor: { $ne: userId }
+          }).sort({ createdAt: -1 });
+
+          if (fallbackMsg) {
+            activeLastMessage = fallbackMsg;
+            activeLastMessageAt = fallbackMsg.createdAt;
+          } else {
+            activeLastMessage = null;
+          }
+        }
+
         return {
           _id: chat._id,
           participant: otherParticipant ?? null,
@@ -93,6 +108,20 @@ export async function getOrCreateChat(req, res, next) {
       const latestBuffered = buffered[buffered.length - 1];
       activeLastMessage = latestBuffered;
       activeLastMessageAt = latestBuffered.createdAt;
+    }
+
+    if (activeLastMessage && activeLastMessage.deletedFor && activeLastMessage.deletedFor.includes(userId)) {
+      const fallbackMsg = await Message.findOne({
+        chat: chat._id,
+        deletedFor: { $ne: userId }
+      }).sort({ createdAt: -1 });
+
+      if (fallbackMsg) {
+        activeLastMessage = fallbackMsg;
+        activeLastMessageAt = fallbackMsg.createdAt;
+      } else {
+        activeLastMessage = null;
+      }
     }
 
     res.json({

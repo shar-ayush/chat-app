@@ -42,7 +42,7 @@ const ChatItem = ({ chat, onPress }: { chat: Chat; onPress: () => void }) => {
               </View>
             )}
             <Text className="text-xs text-subtle-foreground">
-              {chat.lastMessageAt
+              {chat.lastMessageAt && chat.lastMessage
                 ? formatDistanceToNow(new Date(chat.lastMessageAt), { addSuffix: false })
                 : null}
             </Text>
@@ -58,7 +58,9 @@ const ChatItem = ({ chat, onPress }: { chat: Chat; onPress: () => void }) => {
               numberOfLines={1}
             >
               {chat.lastMessage
-                ? chat.lastMessage.text || `📎 ${(chat.lastMessage as any).fileName ?? "File"}`
+                ? ((chat.lastMessage as any).isDeleted 
+                    ? "🚫 This message was deleted" 
+                    : (chat.lastMessage.text || `📎 ${(chat.lastMessage as any).fileName ?? "File"}`))
                 : "No messages yet"}
             </Text>
           )}

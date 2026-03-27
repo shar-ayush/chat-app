@@ -8,7 +8,8 @@ import { useSocketStore } from "@/lib/socket";
 import { useChatApi } from "@/lib/chatApi";
 import { initializeKeyPair } from "@/crypto/keyManager";
 import { uploadFile } from "@/lib/uploadService";
-import { MessageSender } from "@/types";
+import { markMessagesDeletedForMeLocal, markMessagesDeletedForEveryoneLocal } from "@/db/messageQueries";
+import { MessageSender, Chat } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
@@ -59,13 +60,16 @@ const ChatDetailScreen = () => {
   } | null>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
 
+  const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
+  const isSelectionMode = selectedMessages.length > 0;
+
   const { getToken } = useAuth();
   const { data: currentUser } = useCurrentUser();
   const { data: messages, isLoading } = useMessages(chatId);
   const { data: recipientPublicKey, isLoading: isLoadingPublicKey } = usePublicKey(participantId);
   const queryClient = useQueryClient();
 
-  const { joinChat, leaveChat, sendMessage, sendFileMessage, sendTyping, isConnected, onlineUsers, typingUsers } =
+  const { joinChat, leaveChat, sendMessage, sendFileMessage, sendTyping, isConnected, onlineUsers, typingUsers, deleteMessages } =
     useSocketStore();
   const { markMessagesAsRead } = useChatApi();
 
@@ -138,7 +142,67 @@ const ChatDetailScreen = () => {
     [chatId, isConnected, sendTyping]
   );
 
-  // ── File Picker ────────────────────────────────────────────────────
+  const toggleSelection = (msgId: string) => {
+    setSelectedMessages(prev =>
+      prev.includes(msgId) ? prev.filter(id => id !== msgId) : [...prev, msgId]
+    );
+  };
+
+  const handleDeleteForMe = async () => {
+    if (!currentUser) return;
+    await markMessagesDeletedForMeLocal(selectedMessages, currentUser._id);
+
+    // Optimistic cache update for homescreen chat snippet
+    const remainingMessages = messages?.filter(m => !selectedMessages.includes(m._id || (m as any).id)) || [];
+    const newLastMessage = remainingMessages.length > 0 ? remainingMessages[remainingMessages.length - 1] : null;
+
+    queryClient.setQueryData<Chat[]>(["chats"], (oldChats) => {
+      return oldChats?.map(c => {
+        if (c._id === chatId) {
+          return {
+            ...c,
+            lastMessage: newLastMessage ? {
+              _id: newLastMessage._id || (newLastMessage as any).id,
+              text: newLastMessage.text,
+              fileName: newLastMessage.fileName,
+              sender: typeof newLastMessage.sender === 'object' ? newLastMessage.sender._id : newLastMessage.sender,
+              createdAt: newLastMessage.createdAt,
+              isDeleted: newLastMessage.isDeleted
+            } : null
+          };
+        }
+        return c;
+      });
+    });
+
+    queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
+    deleteMessages('delete_for_me', { messageIds: selectedMessages, chatId, userId: currentUser._id });
+    setSelectedMessages([]);
+  };
+
+  const handleDeleteForEveryone = async () => {
+    if (!currentUser) return;
+    await markMessagesDeletedForEveryoneLocal(selectedMessages);
+
+    // Optimistic update for homescreen (shows tombstone)
+    queryClient.setQueryData<Chat[]>(["chats"], (oldChats) => {
+      return oldChats?.map(c => {
+        if (c._id === chatId && c.lastMessage && selectedMessages.includes(c.lastMessage._id)) {
+          return {
+            ...c,
+            lastMessage: { ...c.lastMessage, isDeleted: true, text: "" }
+          };
+        }
+        return c;
+      });
+    });
+
+    queryClient.invalidateQueries({ queryKey: ["messages", chatId] });
+    deleteMessages('delete_for_everyone', { messageIds: selectedMessages, chatId, userId: currentUser._id });
+    setSelectedMessages([]);
+  };
+
+  // File Picker 
   const handlePickFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -245,7 +309,7 @@ const ChatDetailScreen = () => {
     setUploadProgress(0);
   };
 
-  // ── Send text message ──────────────────────────────────────────────
+  // Send text message 
   const handleSend = async () => {
     if (!messageText.trim() || isSending || !currentUser) return;
 
@@ -280,30 +344,59 @@ const ChatDetailScreen = () => {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top", "bottom"]}>
       {/* Header */}
-      <View className="flex-row items-center px-4 py-2 bg-surface border-b border-surface-light">
-        <Pressable onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#F4A261" />
-        </Pressable>
-        <View className="flex-row items-center flex-1 ml-2">
-          {avatar && <Image source={{ uri: avatar }} style={{ width: 40, height: 40, borderRadius: 999 }} />}
-          <View className="ml-3">
-            <Text className="text-foreground font-semibold text-base" numberOfLines={1}>
-              {name}
-            </Text>
-            <Text className={`text-xs ${isTyping ? "text-primary" : "text-muted-foreground"}`}>
-              {isTyping ? "typing..." : isOnline ? "Online" : "Offline"}
-            </Text>
+      {isSelectionMode ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#242428', borderBottomWidth: 1, borderBottomColor: '#2D2D30', height: 56, elevation: 2 }}>
+          <Pressable onPress={() => setSelectedMessages([])} style={{ padding: 8, marginLeft: -8 }}>
+            <Ionicons name="close" size={24} color="#F4A261" />
+          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginLeft: 16 }}>
+            <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 18 }}>{selectedMessages.length}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+            {selectedMessages.every(id => {
+              // messages can use _id or id depending on mapping
+              const msg = messages?.find(m => m._id === id || (m as any).id === id);
+              if (!msg || msg.isDeleted) return false; // Hide "For everyone" if already deleted
+              const senderId = typeof msg.sender === 'object' ? msg.sender._id : msg.sender;
+              return senderId === currentUser?._id;
+            }) && (
+                <Pressable onPress={handleDeleteForEveryone} style={{ padding: 8 }} className="flex-row justify-center items-center gap-2">
+                  <Ionicons name="trash" size={22} color="#EF476F" />
+                  <Text className="text-sm text-white">For everyone</Text>
+                </Pressable>
+              )}
+            <Pressable onPress={handleDeleteForMe} style={{ padding: 8 }} className="flex-row justify-center items-center gap-2">
+              <Ionicons name="trash-outline" size={22} color="#F4A261" />
+              <Text className="text-sm text-white">For me</Text>
+            </Pressable>
           </View>
         </View>
-        <View className="flex-row items-center gap-3">
-          <Pressable className="w-9 h-9 rounded-full items-center justify-center">
-            <Ionicons name="call-outline" size={20} color="#A0A0A5" />
+      ) : (
+        <View className="flex-row items-center px-4 py-2 bg-surface border-b border-surface-light h-[56px]">
+          <Pressable onPress={() => router.back()} className="p-2 -ml-2">
+            <Ionicons name="arrow-back" size={24} color="#F4A261" />
           </Pressable>
-          <Pressable className="w-9 h-9 rounded-full items-center justify-center">
-            <Ionicons name="videocam-outline" size={20} color="#A0A0A5" />
-          </Pressable>
+          <View className="flex-row items-center flex-1 ml-2">
+            {avatar ? <Image source={{ uri: Array.isArray(avatar) ? avatar[0] : avatar }} style={{ width: 40, height: 40, borderRadius: 999 }} /> : null}
+            <View className="ml-3">
+              <Text className="text-foreground font-semibold text-base" numberOfLines={1}>
+                {name}
+              </Text>
+              <Text className={`text-xs ${isTyping ? "text-primary" : "text-muted-foreground"}`}>
+                {isTyping ? "typing..." : isOnline ? "Online" : "Offline"}
+              </Text>
+            </View>
+          </View>
+          <View className="flex-row items-center gap-3">
+            <Pressable className="w-9 h-9 rounded-full items-center justify-center">
+              <Ionicons name="call-outline" size={20} color="#A0A0A5" />
+            </Pressable>
+            <Pressable className="w-9 h-9 rounded-full items-center justify-center">
+              <Ionicons name="videocam-outline" size={20} color="#A0A0A5" />
+            </Pressable>
+          </View>
         </View>
-      </View>
+      )}
 
       <KeyboardAvoidingView
         className="flex-1"
@@ -334,8 +427,18 @@ const ChatDetailScreen = () => {
               {messages.map((message) => {
                 const senderId = typeof message.sender === "object" ? (message.sender as MessageSender)._id : message.sender;
                 const isFromMe = currentUser ? senderId === currentUser._id : false;
+                const msgId = message._id || (message as any).id;
 
-                return <MessageBubble key={message._id} message={message} isFromMe={isFromMe} />;
+                return <MessageBubble
+                  key={msgId}
+                  message={message}
+                  isFromMe={isFromMe}
+                  isSelected={selectedMessages.includes(msgId)}
+                  selectionMode={isSelectionMode}
+                  onLongPress={() => !isSelectionMode && toggleSelection(msgId)}
+                  onPress={() => isSelectionMode && toggleSelection(msgId)}
+                  currentUserId={currentUser?._id}
+                />;
               })}
             </ScrollView>
           )}

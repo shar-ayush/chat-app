@@ -1,6 +1,6 @@
 import NetInfo from "@react-native-community/netinfo";
 import { useSocketStore } from "./socket";
-import { getOldestPendingMessage, updateMessageStatus, resetSendingToPending } from "../db/messageQueries";
+import { getOldestPendingMessage, updateMessageStatus, resetSendingToPending, getPendingActions, deletePendingAction } from "../db/messageQueries";
 
 let isProcessing = false;
 
@@ -104,9 +104,45 @@ export const processQueueSequentially = async () => {
   }
 };
 
+let isProcessingActions = false;
+
+export const processActionsSequentially = async () => {
+  if (isProcessingActions) return;
+  const { socket, queryClient } = useSocketStore.getState();
+  if (!socket?.connected) return;
+
+  isProcessingActions = true;
+
+  try {
+    const actions = await getPendingActions();
+    if (actions.length === 0) {
+      isProcessingActions = false;
+      return;
+    }
+
+    const action = actions[0];
+    const payload = JSON.parse(action.payload);
+
+    socket.emit(action.type, payload);
+    await deletePendingAction(action.id);
+    
+    if (queryClient) {
+      queryClient.invalidateQueries({ queryKey: ["messages"] });
+    }
+  } catch (error) {
+    console.error("Action queue error:", error);
+  } finally {
+    isProcessingActions = false;
+  }
+
+  const moreActions = await getPendingActions();
+  if (moreActions.length > 0) processActionsSequentially();
+};
+
 // Start sync loop on net reconnect or app start
 export const triggerSync = async () => {
   await resetSendingToPending(); // Reset stuck 'sending' to 'pending'
   processQueueSequentially();
+  processActionsSequentially();
 };
 

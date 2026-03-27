@@ -5,7 +5,8 @@ import { Message } from "../models/Message.js";
 import { Chat } from "../models/Chat.js";
 import { User } from "../models/User.js";
 import 'dotenv/config'
-import { addMessageToBuffer } from "./messageBuffer.js";
+import { addMessageToBuffer, flushChat } from "./messageBuffer.js";
+import crypto from "crypto";
 
 export const onlineUsers = new Map();
 
@@ -167,6 +168,63 @@ export const initializeSocket = (httpServer) => {
         }
       } catch (error) {
         // silently fail - typing indicator is not critical
+      }
+    });
+
+    socket.on("delete_for_me", async ({ messageIds, chatId, userId: reqUserId }) => {
+      if (reqUserId !== userId) return;
+      
+      try {
+        if (chatId) await flushChat(chatId);
+        // messageIds are likely localIds from frontend, or server _ids
+        await Message.updateMany(
+          { $or: [{ localId: { $in: messageIds } }, { _id: { $in: messageIds } }] },
+          { $addToSet: { deletedFor: userId } }
+        );
+        socket.emit("messages_deleted_for_me", { messageIds });
+      } catch (error) {
+        console.error("Delete for me error:", error);
+      }
+    });
+
+    socket.on("delete_for_everyone", async ({ messageIds, chatId, userId: reqUserId }) => {
+      if (reqUserId !== userId) return;
+
+      try {
+        if (chatId) await flushChat(chatId);
+        const messages = await Message.find({
+          $or: [{ localId: { $in: messageIds } }, { _id: { $in: messageIds } }],
+          chat: chatId
+        });
+
+        if (messages.length === 0) return;
+
+        const allOwned = messages.every(msg => msg.sender.toString() === userId);
+        if (!allOwned) {
+          socket.emit("socket-error", { message: "Unauthorized delete", localId: messageIds[0] });
+          return;
+        }
+
+        await Message.updateMany(
+          { _id: { $in: messages.map(m => m._id) } },
+          { $set: { isDeleted: true, deletedAt: new Date() } }
+        );
+
+        const mongoIds = messages.map(m => m._id.toString());
+        const allIdsToBroadcast = Array.from(new Set([...messageIds, ...mongoIds]));
+
+        const chat = await Chat.findById(chatId);
+        if (chat) {
+          const otherParticipantId = chat.participants.find((p) => p.toString() !== userId);
+          if (otherParticipantId) {
+            io.to(`user:${otherParticipantId}`).emit("messages_deleted", { messageIds: allIdsToBroadcast });
+          }
+        }
+
+        // Broadcast to chat room
+        io.to(`chat:${chatId}`).emit("messages_deleted", { messageIds: allIdsToBroadcast });
+      } catch (error) {
+        console.error("Delete for everyone error:", error);
       }
     });
 

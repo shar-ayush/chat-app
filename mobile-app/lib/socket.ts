@@ -4,13 +4,13 @@ import { QueryClient } from "@tanstack/react-query";
 import { Chat, MessageSender, User } from "@/types";
 import { encryptMessage, decryptMessage } from "@/crypto/messageCrypto";
 import * as Crypto from 'expo-crypto';
-import { insertMessage } from "../db/messageQueries";
+import { insertMessage, markMessagesDeletedForEveryoneLocal, insertPendingAction } from "../db/messageQueries";
 import { triggerSync } from "./syncEngine";
 import { getDb } from "../db/database";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const SOCKET_URL = "https://chat-app-muyj.onrender.com";
-// export const SOCKET_URL = "http://172.16.216.225:3000";
+// export const SOCKET_URL = "http://172.16.219.240:3000";
 
 interface SocketState {
   socket: Socket | null;
@@ -28,6 +28,7 @@ interface SocketState {
   sendMessage: (chatId: string, text: string, currentUser: MessageSender, recipientPublicKey: string) => Promise<void>;
   sendFileMessage: (chatId: string, filePayload: { fileUrl: string; fileName: string; mimeType: string; fileSize: number }, currentUser: MessageSender) => Promise<void>;
   sendTyping: (chatId: string, isTyping: boolean) => void;
+  deleteMessages: (type: 'delete_for_me' | 'delete_for_everyone', payload: any) => Promise<void>;
 }
 
 export const useSocketStore = create<SocketState>((set, get) => ({
@@ -84,7 +85,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
               status: 'delivered',
               created_at: new Date(msg.createdAt).getTime(),
               server_id: msg._id,
-              retry_count: 0
+              retry_count: 0,
+              is_deleted: msg.isDeleted ? 1 : 0,
+              deleted_at: msg.deletedAt ? new Date(msg.deletedAt).getTime() : null,
+              deleted_for: msg.deletedFor ? JSON.stringify(msg.deletedFor) : null,
             });
             syncedCount++;
           }
@@ -152,7 +156,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         status: 'delivered',
         created_at: new Date(message.createdAt).getTime(),
         server_id: message._id,
-        retry_count: 0
+        retry_count: 0,
+        is_deleted: message.isDeleted ? 1 : 0,
+        deleted_at: message.deletedAt ? new Date(message.deletedAt).getTime() : null,
+        deleted_for: message.deletedFor ? JSON.stringify(message.deletedFor) : null,
       });
 
       // Force UI to pick up new SQLite message
@@ -241,6 +248,35 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         });
       }
     );
+
+    socket.on("messages_deleted", async ({ messageIds }: { messageIds: string[] }) => {
+      if (messageIds && messageIds.length > 0) {
+        await markMessagesDeletedForEveryoneLocal(messageIds);
+        queryClient.invalidateQueries({ queryKey: ["messages"] });
+
+        // Ensure other users see the deleted tombstone on homescreen immediately
+        queryClient.setQueryData<Chat[]>(["chats"], (oldChats) => {
+          if (!oldChats) return oldChats;
+          return oldChats.map(c => {
+            if (c.lastMessage && (messageIds.includes(c.lastMessage._id) || messageIds.includes((c.lastMessage as any).id))) {
+              return {
+                ...c,
+                lastMessage: { ...c.lastMessage, isDeleted: true, text: "" }
+              };
+            }
+            return c;
+          });
+        });
+
+        queryClient.invalidateQueries({ queryKey: ["chats"] });
+      }
+    });
+
+    socket.on("messages_deleted_for_me", async ({ messageIds }: { messageIds: string[] }) => {
+      if (messageIds && messageIds.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ["chats"] });
+      }
+    });
 
     set({ socket, queryClient });
   },
@@ -407,6 +443,21 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const { socket } = get();
     if (socket?.connected) {
       socket.emit("typing", { chatId, isTyping });
+    }
+  },
+
+  deleteMessages: async (type, payload) => {
+    const { socket } = get();
+    if (socket?.connected) {
+      socket.emit(type, payload);
+    } else {
+      await insertPendingAction({
+        id: Crypto.randomUUID(),
+        type,
+        payload: JSON.stringify(payload),
+        created_at: Date.now()
+      });
+      triggerSync();
     }
   },
 }));

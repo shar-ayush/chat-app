@@ -1,4 +1,4 @@
-🚀 Whisper — Secure Real-Time Chat with E2EE, Offline-First Sync, and Deterministic Delivery
+Whisper — Secure Real-Time Chat with E2EE, Offline-First Sync, and Deterministic Delivery
 ============================================================================================
 📌 Overview
 ===========
@@ -31,21 +31,21 @@ Most chat apps are **online-first**. Whisper is built for:
 
 Whisper combines **cryptography + local persistence + deterministic sync**:
 
-### 🔐 Privacy First
+### Privacy First
 
 *   Messages encrypted on-device using TweetNaCl
     
 *   Server stores only encrypted blobs
     
 
-### 📡 Offline-First
+### Offline-First
 
 *   SQLite acts as **local source of truth**
     
 *   UI renders from local DB, not network
     
 
-### ⚙️ Deterministic Delivery
+### Deterministic Delivery
 
 *   Sequential queue processing
     
@@ -54,10 +54,10 @@ Whisper combines **cryptography + local persistence + deterministic sync**:
 *   Pull-based recovery using timestamps
     
 
-🏗️ Architecture
+Architecture
 ================
 
-📱 Client (React Native)
+Client (React Native)
 ------------------------
 
 ### UI Layer
@@ -67,27 +67,27 @@ Whisper combines **cryptography + local persistence + deterministic sync**:
 *   Optimistic updates (instant UI feedback)
     
 
-### 🗄️ Local Database (SQLite)
+### Local Database (SQLite)
 
 *   Stores messages, metadata, retry states
 *   Separate pending actions queue
     
 
-### 🔐 Encryption Layer
+### Encryption Layer
 
 *   TweetNaCl-based encryption
 *   Key lifecycle handled in keyManager.ts
 *   Secure randomness via expo-crypto
     
 
-### 🔄 Sync Engine
+### Sync Engine
 
 *   Sequential queue processor
 *   Retry + failure handling
 *   Handles both messages and actions
     
 
-### 📡 Socket Layer
+### Socket Layer
 
 *   Managed via socket.ts   
 *   Handles:
@@ -98,7 +98,7 @@ Whisper combines **cryptography + local persistence + deterministic sync**:
     *   deletions
         
 
-🖥️ Server (Node.js + Express)
+Server (Node.js + Express)
 ------------------------------
 
 ### WebSocket Server
@@ -137,7 +137,7 @@ Whisper combines **cryptography + local persistence + deterministic sync**:
 🔄 Data Flow
 ============
 
-### 📤 Sending Message
+### Sending Message
 
 1.  Encrypt on client
 2.  Store in SQLite (pending)
@@ -147,7 +147,7 @@ Whisper combines **cryptography + local persistence + deterministic sync**:
 6.  Broadcast to recipient
     
 
-### 📥 Receiving Message
+### Receiving Message
 
 1.  Receive via socket
 2.  Store in SQLite
@@ -155,7 +155,7 @@ Whisper combines **cryptography + local persistence + deterministic sync**:
 4.  UI updates instantly
     
 
-### 🔁 Offline Sync
+### Offline Sync
 
 1.  Messages stored locally
 2.  Reconnect triggers:
@@ -194,7 +194,7 @@ Whisper combines **cryptography + local persistence + deterministic sync**:
 *   Expo File System
     
 
-✨ Core Features
+Core Features
 ===============
 
 🔴 WebSocket Real-Time Engine

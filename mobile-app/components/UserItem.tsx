@@ -25,7 +25,9 @@ function UserItem({ user, isOnline, onPress }: UserItemProps) {
           </Text>
           {isOnline && <Text className="text-xs text-primary font-medium">Online</Text>}
         </View>
-        <Text className="text-xs text-subtle-foreground mt-0.5">{user.email}</Text>
+        <Text className="text-xs text-subtle-foreground mt-0.5">
+          {user.username ? `@${user.username}` : user.email}
+        </Text>
       </View>
     </Pressable>
   );

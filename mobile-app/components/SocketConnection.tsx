@@ -17,7 +17,7 @@ const SocketConnection = () => {
     if (isSignedIn) {
       getToken()
         .then((token) => {
-          if (token) connect(token, queryClient);
+          if (token) connect(token, queryClient, getToken);
         })
         .catch(() => {});
     } else disconnect();

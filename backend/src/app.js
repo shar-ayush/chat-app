@@ -6,11 +6,13 @@ import authRoutes from "./routes/authRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import friendRoutes from "./routes/friendRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import {errorHandler} from './middleware/errorHandler.js';
 
 const app = express();
 
+app.use(cors());
 app.use(express.json());
 
 app.use(clerkMiddleware());
@@ -23,6 +25,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/friends", friendRoutes);
 app.use("/api/upload", uploadRoutes);
 
 app.use(errorHandler);

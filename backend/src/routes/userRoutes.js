@@ -1,11 +1,14 @@
 import { Router } from "express";
 import { protectRoute } from "../middleware/auth.js";
-import { getUsers } from "../controllers/userController.js";
+import { getUsers, searchUsers, updateUsername, deleteAccount } from "../controllers/userController.js";
 import { User } from "../models/User.js";
 
 const router = Router();
 
 router.get("/", protectRoute, getUsers);
+router.get("/search", protectRoute, searchUsers);
+router.put("/username", protectRoute, updateUsername);
+router.delete("/account", protectRoute, deleteAccount);
 
 // Upload or update public key
 router.post("/public-key", protectRoute, async (req, res) => {

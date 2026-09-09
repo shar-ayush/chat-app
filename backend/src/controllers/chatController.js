@@ -1,5 +1,6 @@
 import { Chat } from "../models/Chat.js";
 import { Message } from "../models/Message.js";
+import { FriendRequest } from "../models/FriendRequest.js";
 import { Types } from "mongoose";
 import { getBufferedMessages } from "../utils/messageBuffer.js";
 
@@ -93,6 +94,21 @@ export async function getOrCreateChat(req, res, next) {
       .populate("lastMessage");
 
     if (!chat) {
+      // Must be friends to initiate a new chat
+      const isFriend = await FriendRequest.exists({
+        status: "accepted",
+        $or: [
+          { sender: userId, recipient: participantId },
+          { sender: participantId, recipient: userId },
+        ],
+      });
+
+      if (!isFriend) {
+        return res.status(403).json({
+          message: "You must be accepted friends with this user to start chatting",
+        });
+      }
+
       const newChat = new Chat({ participants: [userId, participantId] });
       await newChat.save();
       chat = await newChat.populate("participants", "name email avatar");

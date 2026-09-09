@@ -1,26 +1,43 @@
 import * as SQLite from 'expo-sqlite';
-
-let dbInstance: SQLite.SQLiteDatabase | null = null;
-
-export const getDb = async () => {
-  if (dbInstance) return dbInstance;
-  
-  dbInstance = await SQLite.openDatabaseAsync('chat.db');
-  return dbInstance;
-};
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const initDb = async () => {
-  const db = await getDb();
-  
-  const version = await AsyncStorage.getItem("db_version");
-  if (version !== "3") {
-    // Migration: drop old table, update version
-    await db.execAsync("DROP TABLE IF EXISTS messages");
-    await AsyncStorage.removeItem('lastSyncTimestamp');
-    await AsyncStorage.setItem("db_version", "3");
+let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+
+export const getDb = async () => {
+  if (!dbPromise) {
+    dbPromise = SQLite.openDatabaseAsync('chat.db');
   }
+  return dbPromise;
+};
+
+// Global serial execution queue to eliminate concurrent prepareAsync/runAsync race conditions in expo-sqlite on Android
+let queryQueue = Promise.resolve<any>(undefined);
+
+export const runWithDb = async <T>(operation: (db: SQLite.SQLiteDatabase) => Promise<T>): Promise<T> => {
+  const db = await getDb();
+  return new Promise<T>((resolve, reject) => {
+    queryQueue = queryQueue
+      .catch(() => {}) // never let a previous query failure block subsequent queries
+      .then(async () => {
+        try {
+          const result = await operation(db);
+          resolve(result);
+        } catch (err) {
+          reject(err);
+        }
+      });
+  });
+};
+
+export const initDb = async () => {
+  return runWithDb(async (db) => {
+    const version = await AsyncStorage.getItem("db_version");
+    if (version !== "4") {
+      // Migration: drop stale local tables, reset sync timestamp
+      await db.execAsync("DROP TABLE IF EXISTS messages; DROP TABLE IF EXISTS chats;");
+      await AsyncStorage.removeItem('lastSyncTimestamp');
+      await AsyncStorage.setItem("db_version", "4");
+    }
 
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
@@ -99,4 +116,5 @@ export const initDb = async () => {
   }
 
   console.log('Database initialized successfully');
+  });
 };

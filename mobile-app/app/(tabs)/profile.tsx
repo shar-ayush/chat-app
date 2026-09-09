@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCurrentUser } from "@/hooks/useAuth";
 import { useUpdateUsername, useDeleteAccount } from "@/hooks/useFriends";
 import { useSocketStore } from "@/lib/socket";
+import { useThemeStore } from "@/lib/theme";
 import { getDb } from "@/db/database";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useState } from "react";
@@ -26,7 +27,7 @@ const MENU_SECTIONS: MenuSection[] = [
   {
     title: "Account",
     items: [
-      { id: "username", icon: "at-outline", label: "Edit Username", color: "#F4A261" },
+      { id: "username", icon: "at-outline", label: "Edit Username", color: "#007AFF" },
     ],
   },
 ];
@@ -38,6 +39,7 @@ const ProfileTab = () => {
   const { mutate: updateUsername, isPending: isUpdatingUsername } = useUpdateUsername();
   const { mutate: deleteAccount, isPending: isDeletingAccount } = useDeleteAccount();
   const disconnect = useSocketStore((state) => state.disconnect);
+  const { themeMode, isDark, setThemeMode } = useThemeStore();
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [newUsername, setNewUsername] = useState("");
@@ -119,7 +121,7 @@ const ProfileTab = () => {
   };
 
   return (
-    <View className="flex-1 bg-surface-dark">
+    <View className="flex-1 bg-[#F8FAFC] dark:bg-[#0D0D0F]">
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
@@ -137,32 +139,32 @@ const ProfileTab = () => {
               </View>
 
               <Pressable
-                className="absolute bottom-1 right-1 w-8 h-8 bg-primary rounded-full items-center justify-center border-2 border-surface-dark"
+                className="absolute bottom-1 right-1 w-8 h-8 bg-primary rounded-full items-center justify-center border-2 border-white dark:border-[#0D0D0F]"
                 onPress={handleOpenEditUsername}
               >
-                <Ionicons name="pencil" size={15} color="#0D0D0F" />
+                <Ionicons name="pencil" size={15} color="#FFFFFF" />
               </Pressable>
             </View>
 
             {/* NAME */}
-            <Text className="text-2xl font-bold text-foreground mt-4">
+            <Text className="text-2xl font-bold text-slate-900 dark:text-foreground mt-4">
               {clerkUser?.firstName} {clerkUser?.lastName}
             </Text>
 
             {/* USERNAME BADGE */}
             <Pressable
               onPress={handleOpenEditUsername}
-              className="flex-row items-center mt-1 bg-surface-card px-3 py-1 rounded-full border border-surface-light gap-1.5 active:opacity-70"
+              className="flex-row items-center mt-1 bg-white dark:bg-surface-card px-3 py-1 rounded-full border border-slate-200 dark:border-surface-light gap-1.5 active:opacity-70"
             >
-              <Ionicons name="at" size={14} color="#F4A261" />
+              <Ionicons name="at" size={14} color="#007AFF" />
               <Text className="text-primary text-sm font-semibold">
                 {currentUsername ? currentUsername : "set username"}
               </Text>
-              <Ionicons name="pencil" size={12} color="#6B6B70" />
+              <Ionicons name="pencil" size={12} color={isDark ? "#8E8E93" : "#64748B"} />
             </Pressable>
 
             {/* EMAIL */}
-            <Text className="text-muted-foreground text-xs mt-1.5">
+            <Text className="text-slate-500 dark:text-muted-foreground text-xs mt-1.5">
               {clerkUser?.emailAddresses[0]?.emailAddress}
             </Text>
 
@@ -173,18 +175,56 @@ const ProfileTab = () => {
           </View>
         </View>
 
+        {/* APPEARANCE (THEME TOGGLE) */}
+        <View className="mt-6 mx-5">
+          <Text className="text-slate-500 dark:text-subtle-foreground text-xs font-semibold uppercase tracking-wider mb-2 ml-1">
+            Appearance
+          </Text>
+          <View className="bg-white dark:bg-surface-card rounded-2xl p-1.5 border border-slate-200 dark:border-surface-light flex-row items-center gap-1.5">
+            {[
+              { mode: "system" as const, label: "System", icon: "phone-portrait-outline" },
+              { mode: "light" as const, label: "Light", icon: "sunny-outline" },
+              { mode: "dark" as const, label: "Dark", icon: "moon-outline" },
+            ].map(({ mode, label, icon }) => {
+              const isSelected = themeMode === mode;
+              return (
+                <Pressable
+                  key={mode}
+                  onPress={() => setThemeMode(mode)}
+                  className={`flex-1 py-2.5 rounded-xl items-center justify-center flex-row gap-1.5 ${
+                    isSelected ? "bg-primary" : "bg-transparent active:bg-slate-100 dark:active:bg-surface-light"
+                  }`}
+                >
+                  <Ionicons
+                    name={icon as any}
+                    size={16}
+                    color={isSelected ? "#FFFFFF" : isDark ? "#8E8E93" : "#64748B"}
+                  />
+                  <Text
+                    className={`text-xs font-semibold ${
+                      isSelected ? "text-white" : "text-slate-600 dark:text-subtle-foreground"
+                    }`}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         {/* MENU SECTIONS */}
         {MENU_SECTIONS.map((section) => (
           <View key={section.title} className="mt-6 mx-5">
-            <Text className="text-subtle-foreground text-xs font-semibold uppercase tracking-wider mb-2 ml-1">
+            <Text className="text-slate-500 dark:text-subtle-foreground text-xs font-semibold uppercase tracking-wider mb-2 ml-1">
               {section.title}
             </Text>
-            <View className="bg-surface-card rounded-2xl overflow-hidden border border-surface-light">
+            <View className="bg-white dark:bg-surface-card rounded-2xl overflow-hidden border border-slate-200 dark:border-surface-light">
               {section.items.map((item, index) => (
                 <Pressable
                   key={item.label}
-                  className={`flex-row items-center px-4 py-3.5 active:bg-surface-light ${
-                    index < section.items.length - 1 ? "border-b border-surface-light" : ""
+                  className={`flex-row items-center px-4 py-3.5 active:bg-slate-100 dark:active:bg-surface-light ${
+                    index < section.items.length - 1 ? "border-b border-slate-200 dark:border-surface-light" : ""
                   }`}
                   onPress={() => {
                     if (item.id === "username") handleOpenEditUsername();
@@ -196,13 +236,13 @@ const ProfileTab = () => {
                   >
                     <Ionicons name={item.icon as any} size={20} color={item.color} />
                   </View>
-                  <Text className="flex-1 ml-3 text-foreground font-medium">{item.label}</Text>
+                  <Text className="flex-1 ml-3 text-slate-900 dark:text-foreground font-medium">{item.label}</Text>
                   {item.id === "username" && currentUsername ? (
                     <Text className="text-primary text-sm font-medium mr-1">@{currentUsername}</Text>
                   ) : item.value ? (
-                    <Text className="text-subtle-foreground text-sm mr-1">{item.value}</Text>
+                    <Text className="text-slate-500 dark:text-subtle-foreground text-sm mr-1">{item.value}</Text>
                   ) : null}
-                  <Ionicons name="chevron-forward" size={18} color="#6B6B70" />
+                  <Ionicons name="chevron-forward" size={18} color={isDark ? "#8E8E93" : "#94A3B8"} />
                 </Pressable>
               ))}
             </View>
@@ -211,12 +251,12 @@ const ProfileTab = () => {
 
         {/* Logout Button */}
         <Pressable
-          className="mx-5 mt-8 bg-surface-card rounded-2xl py-4 items-center active:opacity-70 border border-surface-light"
+          className="mx-5 mt-8 bg-white dark:bg-surface-card rounded-2xl py-4 items-center active:opacity-70 border border-slate-200 dark:border-surface-light"
           onPress={() => signOut()}
         >
           <View className="flex-row items-center">
-            <Ionicons name="log-out-outline" size={20} color="#F4A261" />
-            <Text className="ml-2 text-foreground font-semibold">Log Out</Text>
+            <Ionicons name="log-out-outline" size={20} color="#007AFF" />
+            <Text className="ml-2 text-slate-900 dark:text-foreground font-semibold">Log Out</Text>
           </View>
         </Pressable>
 
@@ -245,29 +285,29 @@ const ProfileTab = () => {
         onRequestClose={() => setIsModalVisible(false)}
       >
         <View className="flex-1 bg-black/60 items-center justify-center px-6">
-          <View className="w-full bg-surface-card rounded-3xl p-6 border border-surface-light">
+          <View className="w-full bg-white dark:bg-surface-card rounded-3xl p-6 border border-slate-200 dark:border-surface-light">
             <View className="flex-row items-center justify-between mb-2">
-              <Text className="text-foreground text-lg font-bold">Edit Username</Text>
+              <Text className="text-slate-900 dark:text-foreground text-lg font-bold">Edit Username</Text>
               <Pressable
-                className="w-8 h-8 rounded-full bg-surface-light items-center justify-center"
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-surface-light items-center justify-center"
                 onPress={() => setIsModalVisible(false)}
               >
-                <Ionicons name="close" size={18} color="#A0A0A5" />
+                <Ionicons name="close" size={18} color={isDark ? "#A0A0A5" : "#64748B"} />
               </Pressable>
             </View>
 
-            <Text className="text-muted-foreground text-xs mb-4">
+            <Text className="text-slate-500 dark:text-muted-foreground text-xs mb-4">
               Other users can search for your username to send you a friend request.
             </Text>
 
-            <View className="flex-row items-center bg-surface rounded-xl px-3.5 py-3 border border-surface-light mb-4">
+            <View className="flex-row items-center bg-slate-50 dark:bg-surface rounded-xl px-3.5 py-3 border border-slate-200 dark:border-surface-light mb-4">
               <Text className="text-primary font-bold text-base mr-1">@</Text>
               <TextInput
                 value={newUsername}
                 onChangeText={(text) => setNewUsername(text.toLowerCase())}
                 placeholder="username"
-                placeholderTextColor="#6B6B70"
-                className="flex-1 text-foreground text-base"
+                placeholderTextColor={isDark ? "#6B6B70" : "#94A3B8"}
+                className="flex-1 text-slate-900 dark:text-foreground text-base"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -275,10 +315,10 @@ const ProfileTab = () => {
 
             <View className="flex-row gap-3">
               <Pressable
-                className="flex-1 py-3 rounded-xl bg-surface-light items-center"
+                className="flex-1 py-3 rounded-xl bg-slate-100 dark:bg-surface-light items-center"
                 onPress={() => setIsModalVisible(false)}
               >
-                <Text className="text-subtle-foreground font-semibold text-sm">Cancel</Text>
+                <Text className="text-slate-600 dark:text-subtle-foreground font-semibold text-sm">Cancel</Text>
               </Pressable>
 
               <Pressable
@@ -287,9 +327,9 @@ const ProfileTab = () => {
                 onPress={handleSaveUsername}
               >
                 {isUpdatingUsername ? (
-                  <ActivityIndicator size="small" color="#0D0D0F" />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text className="text-surface-dark font-bold text-sm">Save</Text>
+                  <Text className="text-white font-bold text-sm">Save</Text>
                 )}
               </Pressable>
             </View>

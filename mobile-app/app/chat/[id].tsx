@@ -396,12 +396,12 @@ const ChatDetailScreen = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top", "bottom"]}>
+    <SafeAreaView className="flex-1 bg-[#F8FAFC] dark:bg-[#0D0D0F]" edges={["top", "bottom"]}>
       {/* Header */}
       {isSelectionMode ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#242428', borderBottomWidth: 1, borderBottomColor: '#2D2D30', height: 56, elevation: 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#1C1C1E', borderBottomWidth: 1, borderBottomColor: '#2C2C2E', height: 56, elevation: 2 }}>
           <Pressable onPress={() => setSelectedMessages([])} style={{ padding: 8, marginLeft: -8 }}>
-            <Ionicons name="close" size={24} color="#F4A261" />
+            <Ionicons name="close" size={24} color="#007AFF" />
           </Pressable>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginLeft: 16 }}>
             <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 18 }}>{selectedMessages.length}</Text>
@@ -420,33 +420,33 @@ const ChatDetailScreen = () => {
                 </Pressable>
               )}
             <Pressable onPress={handleDeleteForMe} style={{ padding: 8 }} className="flex-row justify-center items-center gap-2">
-              <Ionicons name="trash-outline" size={22} color="#F4A261" />
+              <Ionicons name="trash-outline" size={22} color="#007AFF" />
               <Text className="text-sm text-white">For me</Text>
             </Pressable>
           </View>
         </View>
       ) : (
-        <View className="flex-row items-center px-4 py-2 bg-surface border-b border-surface-light h-[56px]">
+        <View className="flex-row items-center px-4 py-2 bg-white dark:bg-[#1C1C1E] border-b border-slate-200 dark:border-[#2C2C2E] h-[56px]">
           <Pressable onPress={() => router.back()} className="p-2 -ml-2">
-            <Ionicons name="arrow-back" size={24} color="#F4A261" />
+            <Ionicons name="arrow-back" size={24} color="#007AFF" />
           </Pressable>
           <View className="flex-row items-center flex-1 ml-2">
             {avatar ? <Image source={{ uri: Array.isArray(avatar) ? avatar[0] : avatar }} style={{ width: 40, height: 40, borderRadius: 999 }} /> : null}
             <View className="ml-3">
-              <Text className="text-foreground font-semibold text-base" numberOfLines={1}>
+              <Text className="text-slate-900 dark:text-foreground font-semibold text-base" numberOfLines={1}>
                 {name}
               </Text>
-              <Text className={`text-xs ${isTyping ? "text-primary" : "text-muted-foreground"}`}>
+              <Text className={`text-xs ${isTyping ? "text-primary" : "text-slate-500 dark:text-muted-foreground"}`}>
                 {isTyping ? "typing..." : isOnline ? "Online" : "Offline"}
               </Text>
             </View>
           </View>
           <View className="flex-row items-center gap-3">
             <Pressable className="w-9 h-9 rounded-full items-center justify-center">
-              <Ionicons name="call-outline" size={20} color="#A0A0A5" />
+              <Ionicons name="call-outline" size={20} color="#8E8E93" />
             </Pressable>
             <Pressable className="w-9 h-9 rounded-full items-center justify-center">
-              <Ionicons name="videocam-outline" size={20} color="#A0A0A5" />
+              <Ionicons name="videocam-outline" size={20} color="#8E8E93" />
             </Pressable>
           </View>
         </View>
@@ -457,17 +457,17 @@ const ChatDetailScreen = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={0}
       >
-        <View className="flex-1 bg-surface">
+        <View className="flex-1 bg-[#F8FAFC] dark:bg-[#0D0D0F]">
           {isLoading ? (
             <View className="flex-1 items-center justify-center">
-              <ActivityIndicator size="large" color="#F4A261" />
+              <ActivityIndicator size="large" color="#007AFF" />
             </View>
           ) : !messages || messages.length === 0 ? (
             <EmptyUI
               title="No messages yet"
               subtitle="Start the conversation!"
               iconName="chatbubbles-outline"
-              iconColor="#6B6B70"
+              iconColor="#8E8E93"
               iconSize={64}
             />
           ) : (
@@ -509,8 +509,8 @@ const ChatDetailScreen = () => {
           )}
 
           {/* Input bar */}
-          <View className="px-3 pb-3 pt-2 bg-surface border-t border-surface-light">
-            <View className="flex-row items-center bg-surface-card rounded-3xl px-3 py-1.5 gap-2">
+          <View className="px-3 pb-3 pt-2 bg-white dark:bg-[#1C1C1E] border-t border-slate-200 dark:border-[#2C2C2E]">
+            <View className="flex-row items-center bg-slate-100 dark:bg-[#2C2C2E] rounded-3xl px-3 py-1.5 gap-2">
               {/* File attach button */}
               <Pressable
                 className="w-8 h-8 rounded-full items-center justify-center"
@@ -520,14 +520,14 @@ const ChatDetailScreen = () => {
                 <Ionicons
                   name={isUploading ? "cloud-upload" : "add"}
                   size={22}
-                  color={isUploading ? "#6B6B70" : "#F4A261"}
+                  color={isUploading ? "#8E8E93" : "#007AFF"}
                 />
               </Pressable>
 
               <TextInput
-                placeholder="Type a message"
-                placeholderTextColor="#6B6B70"
-                className="flex-1 text-foreground text-sm mb-2"
+                placeholder="Message"
+                placeholderTextColor="#8E8E93"
+                className="flex-1 text-slate-900 dark:text-foreground text-sm mb-2"
                 multiline
                 style={{ maxHeight: 100 }}
                 value={messageText}
@@ -542,9 +542,9 @@ const ChatDetailScreen = () => {
                 disabled={isSendDisabled}
               >
                 {isSending ? (
-                  <ActivityIndicator size="small" color="#0D0D0F" />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Ionicons name="send" size={18} color={isSendDisabled ? "#4A4A50" : "#0D0D0F"} />
+                  <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
                 )}
               </Pressable>
             </View>

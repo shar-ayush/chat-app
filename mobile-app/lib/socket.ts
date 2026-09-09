@@ -140,8 +140,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       queryClient.invalidateQueries({ queryKey: ["chats"] });
     });
 
-    socket.on("disconnect", () => {
-      console.log("Socket disconnect", socket.id);
+    socket.on("disconnect", (reason) => {
+      console.log("Socket disconnect, reason:", reason);
       set({ isConnected: false });
     });
 

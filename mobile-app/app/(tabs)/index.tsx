@@ -13,18 +13,18 @@ const ChatsTab = () => {
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-surface items-center justify-center">
-        <ActivityIndicator size={"large"} color={"#f4A261"} />
+      <View className="flex-1 bg-[#F8FAFC] dark:bg-[#0D0D0F] items-center justify-center">
+        <ActivityIndicator size={"large"} color={"#007AFF"} />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View className="flex-1 bg-surface items-center justify-center">
+      <View className="flex-1 bg-[#F8FAFC] dark:bg-[#0D0D0F] items-center justify-center">
         <Text className="text-red-500 text-3xl">Failed to load chats</Text>
         <Pressable onPress={() => refetch()} className="mt-4 px-4 py-2 bg-primary rounded-lg">
-          <Text className="text-foreground">Retry</Text>
+          <Text className="text-white font-medium">Retry</Text>
         </Pressable>
       </View>
     );
@@ -43,7 +43,7 @@ const ChatsTab = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-surface">
+    <SafeAreaView className="flex-1 bg-[#F8FAFC] dark:bg-[#0D0D0F]">
       <FlatList
         data={chats}
         keyExtractor={(item) => item._id}
@@ -57,7 +57,7 @@ const ChatsTab = () => {
             title="No chats yet"
             subtitle="Start a conversation!"
             iconName="chatbubbles-outline"
-            iconColor="#6B6B70"
+            iconColor="#8E8E93"
             iconSize={64}
             buttonLabel="New Chat"
             onPressButton={() => router.push("/new-chat")}
@@ -76,12 +76,12 @@ function Header() {
   return (
     <View className="px-2 pb-4">
       <View className="flex-row items-center justify-between">
-        <Text className="text-2xl font-bold text-foreground">Chats</Text>
+        <Text className="text-2xl font-bold text-slate-900 dark:text-foreground">Chats</Text>
         <Pressable
           className="size-10 bg-primary rounded-full items-center justify-center"
           onPress={() => router.push("/new-chat")}
         >
-          <Ionicons name="create-outline" size={20} color="#0D0D0F" />
+          <Ionicons name="create-outline" size={20} color="#FFFFFF" />
         </Pressable>
       </View>
     </View>

@@ -22,7 +22,7 @@ const ChatItem = ({ chat, onPress }: { chat: Chat; onPress: () => void }) => {
       <View className="relative">
         <Image source={{ uri: participant.avatar }} style={{ width: 56, height: 56, borderRadius: 999 }} />
         {isOnline && (
-          <View className="absolute bottom-0 right-0 size-4 bg-green-500 rounded-full border-[3px] border-surface" />
+          <View className="absolute bottom-0 right-0 size-4 bg-green-500 rounded-full border-[3px] border-white dark:border-[#0D0D0F]" />
         )}
       </View>
 
@@ -30,20 +30,20 @@ const ChatItem = ({ chat, onPress }: { chat: Chat; onPress: () => void }) => {
       <View className="flex-1 ml-4">
         <View className="flex-row items-center justify-between">
           <Text
-            className={`text-base font-medium ${hasUnread ? "text-primary" : "text-foreground"}`}
+            className={`text-base ${hasUnread ? "text-primary font-bold" : "text-slate-900 dark:text-foreground font-semibold"}`}
           >
             {participant.name}
           </Text>
 
           <View className="flex-row items-center gap-2">
             {hasUnread && (
-              <View className="flex flex-row bg-primary rounded-full px-2 py-1 min-w-[20px] items-center justify-center">
-                <Text className="text-xs text-white font-medium">
+              <View className="flex flex-row bg-primary rounded-full px-2 py-0.5 min-w-[20px] items-center justify-center">
+                <Text className="text-xs text-white font-bold">
                   {unreadCount > 99 ? '99+' : String(unreadCount)}
                 </Text>
               </View>
             )}
-            <Text className="text-xs text-subtle-foreground">
+            <Text className="text-xs text-slate-400 dark:text-subtle-foreground">
               {chat.lastMessageAt && chat.lastMessage
                 ? formatDistanceToNow(new Date(chat.lastMessageAt), { addSuffix: false })
                 : null}
@@ -53,10 +53,10 @@ const ChatItem = ({ chat, onPress }: { chat: Chat; onPress: () => void }) => {
 
         <View className="flex-row items-center justify-between mt-1">
           {isTyping ? (
-            <Text className="text-sm text-primary italic">typing...</Text>
+            <Text className="text-sm text-primary italic font-medium">typing...</Text>
           ) : (
             <Text
-              className={`text-sm flex-1 mr-3 ${hasUnread ? "text-foreground font-medium" : "text-subtle-foreground"}`}
+              className={`text-sm flex-1 mr-3 ${hasUnread ? "text-slate-900 dark:text-foreground font-medium" : "text-slate-500 dark:text-subtle-foreground"}`}
               numberOfLines={1}
             >
               {chat.lastMessage

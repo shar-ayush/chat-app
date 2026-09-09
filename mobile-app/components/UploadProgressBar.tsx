@@ -28,7 +28,7 @@ export default function UploadProgressBar({
   }, [progress]);
 
   const barColor =
-    status === "failed" ? "#EF4444" : status === "success" ? "#22C55E" : "#F4A261";
+    status === "failed" ? "#EF4444" : status === "success" ? "#22C55E" : "#007AFF";
 
   return (
     <View className="mx-3 mb-2 px-3 py-2 bg-surface-card rounded-2xl border border-surface-light">
@@ -54,7 +54,7 @@ export default function UploadProgressBar({
         )}
         {status === "failed" && onRetry && (
           <Pressable onPress={onRetry} className="flex-row items-center gap-1">
-            <Ionicons name="refresh" size={14} color="#F4A261" />
+            <Ionicons name="refresh" size={14} color="#007AFF" />
             <Text className="text-primary text-xs">Retry</Text>
           </Pressable>
         )}

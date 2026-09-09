@@ -2,12 +2,14 @@ import { Redirect, Tabs } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@clerk/expo'
 import { useFriendRequests } from '@/hooks/useFriends'
+import { useThemeStore } from '@/lib/theme'
 import { View } from 'react-native'
 
 const TabsLayout = () => {
   const { isSignedIn, isLoaded } = useAuth();
   const { data: friendRequests } = useFriendRequests();
   const incomingCount = friendRequests?.incoming?.length || 0;
+  const isDark = useThemeStore((s) => s.isDark);
 
   if (!isLoaded) return null;
   if (!isSignedIn) {
@@ -20,14 +22,14 @@ const TabsLayout = () => {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: "#0D0D0F",
-          borderTopColor: "#1A1A1D",
+          backgroundColor: isDark ? "#0D0D0F" : "#FFFFFF",
+          borderTopColor: isDark ? "#1C1C1E" : "#E2E8F0",
           borderTopWidth: 1,
           height: 88,
           paddingTop: 8,
         },
-        tabBarActiveTintColor: "#F4A261",
-        tabBarInactiveTintColor: "#6B6B70",
+        tabBarActiveTintColor: "#007AFF",
+        tabBarInactiveTintColor: isDark ? "#8E8E93" : "#8E8E93",
         tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
       }}
     >

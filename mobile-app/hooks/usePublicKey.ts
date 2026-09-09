@@ -24,8 +24,7 @@ export const usePublicKey = (userId: string | undefined) => {
       }
     },
     enabled: !!userId,
-    // Cache aggressively — public keys rarely change
-    staleTime: 1000 * 60 * 60, // 1 hour
-    gcTime: 1000 * 60 * 60 * 24, // 24 hours
+    staleTime: 1000 * 30, // 30 seconds
+    gcTime: 1000 * 60 * 60, // 1 hour
   });
 };

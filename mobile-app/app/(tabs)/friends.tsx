@@ -97,14 +97,14 @@ const FriendsTab = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-[#F8FAFC] dark:bg-[#0D0D0F]" edges={["top"]}>
       {/* HEADER */}
       <View className="px-5 pt-2 pb-3">
         <View className="flex-row items-center justify-between">
-          <Text className="text-2xl font-bold text-foreground">Friends</Text>
-          <View className="flex-row items-center gap-2 bg-surface-card px-3 py-1.5 rounded-full border border-surface-light">
+          <Text className="text-2xl font-bold text-slate-900 dark:text-foreground">Friends</Text>
+          <View className="flex-row items-center gap-2 bg-white dark:bg-surface-card px-3 py-1.5 rounded-full border border-slate-200 dark:border-surface-light">
             <View className="w-2 h-2 rounded-full bg-green-500" />
-            <Text className="text-xs text-subtle-foreground font-medium">
+            <Text className="text-xs text-slate-500 dark:text-subtle-foreground font-medium">
               {friends?.filter((f) => onlineUsers.has(f._id)).length || 0} Online
             </Text>
           </View>
@@ -112,12 +112,12 @@ const FriendsTab = () => {
 
         {/* SEARCH USERNAME BAR */}
         <View className="mt-3">
-          <View className="flex-row items-center bg-surface-card rounded-2xl px-3.5 py-2.5 gap-2 border border-surface-light">
-            <Ionicons name="at" size={18} color="#F4A261" />
+          <View className="flex-row items-center bg-white dark:bg-surface-card rounded-2xl px-3.5 py-2.5 gap-2 border border-slate-200 dark:border-surface-light">
+            <Ionicons name="at" size={18} color="#007AFF" />
             <TextInput
               placeholder="Search by username to add friends..."
-              placeholderTextColor="#6B6B70"
-              className="flex-1 text-foreground text-sm"
+              placeholderTextColor="#8E8E93"
+              className="flex-1 text-slate-900 dark:text-foreground text-sm"
               value={searchQuery}
               onChangeText={setSearchQuery}
               autoCapitalize="none"
@@ -125,7 +125,7 @@ const FriendsTab = () => {
             />
             {searchQuery.length > 0 && (
               <Pressable onPress={() => setSearchQuery("")}>
-                <Ionicons name="close-circle" size={18} color="#6B6B70" />
+                <Ionicons name="close-circle" size={18} color="#8E8E93" />
               </Pressable>
             )}
           </View>
@@ -133,34 +133,32 @@ const FriendsTab = () => {
 
         {/* SEARCH RESULTS DROPDOWN (when search query >= 2 chars) */}
         {searchQuery.trim().length >= 2 && (
-          <View className="mt-2 bg-surface-card rounded-2xl p-3 border border-surface-light max-h-72">
-            <Text className="text-muted-foreground text-xs font-semibold uppercase tracking-wider mb-2">
+          <View className="mt-2 bg-white dark:bg-surface-card rounded-2xl p-3 border border-slate-200 dark:border-surface-light max-h-72">
+            <Text className="text-slate-400 dark:text-muted-foreground text-xs font-semibold uppercase tracking-wider mb-2">
               SEARCH RESULTS
             </Text>
             {isSearching ? (
               <View className="py-4 items-center">
-                <ActivityIndicator size="small" color="#F4A261" />
+                <ActivityIndicator size="small" color="#007AFF" />
               </View>
             ) : !searchResults || searchResults.length === 0 ? (
               <View className="py-3 items-center">
-                <Text className="text-subtle-foreground text-sm">
-                  No users found matching "@{searchQuery.trim()}"
-                </Text>
+                <Text className="text-slate-500 dark:text-subtle-foreground text-sm">No users found</Text>
               </View>
             ) : (
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 {searchResults.map((user: SearchUserResult) => (
                   <View
                     key={user._id}
-                    className="flex-row items-center py-2.5 border-b border-surface-light justify-between"
+                    className="flex-row items-center justify-between py-2 border-b border-slate-100 dark:border-surface-light last:border-b-0"
                   >
-                    <View className="flex-row items-center flex-1 mr-2">
+                    <View className="flex-row items-center gap-2.5 flex-1 mr-2">
                       <Image
                         source={{ uri: user.avatar }}
-                        style={{ width: 40, height: 40, borderRadius: 999 }}
+                        style={{ width: 36, height: 36, borderRadius: 18 }}
                       />
-                      <View className="ml-3 flex-1">
-                        <Text className="text-foreground font-semibold text-sm" numberOfLines={1}>
+                      <View className="flex-1">
+                        <Text className="text-slate-900 dark:text-foreground text-sm font-semibold" numberOfLines={1}>
                           {user.name}
                         </Text>
                         <Text className="text-primary text-xs font-medium">
@@ -170,14 +168,14 @@ const FriendsTab = () => {
                     </View>
 
                     {user.status === "friends" ? (
-                      <View className="px-3 py-1 bg-surface rounded-full border border-surface-light flex-row items-center gap-1">
+                      <View className="px-3 py-1 bg-slate-100 dark:bg-surface rounded-full border border-slate-200 dark:border-surface-light flex-row items-center gap-1">
                         <Ionicons name="checkmark-circle" size={14} color="#10B981" />
                         <Text className="text-green-500 text-xs font-semibold">Friends</Text>
                       </View>
                     ) : user.status === "pending_sent" ? (
-                      <View className="px-3 py-1 bg-surface rounded-full border border-surface-light flex-row items-center gap-1">
-                        <Ionicons name="time-outline" size={14} color="#6B6B70" />
-                        <Text className="text-subtle-foreground text-xs font-medium">Requested</Text>
+                      <View className="px-3 py-1 bg-slate-100 dark:bg-surface rounded-full border border-slate-200 dark:border-surface-light flex-row items-center gap-1">
+                        <Ionicons name="time-outline" size={14} color="#8E8E93" />
+                        <Text className="text-slate-500 dark:text-subtle-foreground text-xs font-medium">Requested</Text>
                       </View>
                     ) : user.status === "pending_received" ? (
                       <Pressable
@@ -194,8 +192,8 @@ const FriendsTab = () => {
                         disabled={isSendingRequest}
                         onPress={() => handleSendRequest(user._id)}
                       >
-                        <Ionicons name="person-add" size={13} color="#0D0D0F" />
-                        <Text className="text-surface-dark text-xs font-bold">Add</Text>
+                        <Ionicons name="person-add" size={13} color="#FFFFFF" />
+                        <Text className="text-white text-xs font-bold">Add</Text>
                       </Pressable>
                     )}
                   </View>
@@ -206,7 +204,7 @@ const FriendsTab = () => {
         )}
 
         {/* TABS SELECTOR */}
-        <View className="flex-row mt-3 p-1 bg-surface-card rounded-2xl border border-surface-light">
+        <View className="flex-row mt-3 p-1 bg-white dark:bg-surface-card rounded-2xl border border-slate-200 dark:border-surface-light">
           <Pressable
             className={`flex-1 py-2 rounded-xl flex-row items-center justify-center gap-1.5 ${
               activeTab === "friends" ? "bg-primary" : ""
@@ -216,11 +214,11 @@ const FriendsTab = () => {
             <Ionicons
               name="people"
               size={16}
-              color={activeTab === "friends" ? "#0D0D0F" : "#A0A0A5"}
+              color={activeTab === "friends" ? "#FFFFFF" : "#8E8E93"}
             />
             <Text
               className={`text-sm font-semibold ${
-                activeTab === "friends" ? "text-surface-dark" : "text-subtle-foreground"
+                activeTab === "friends" ? "text-white" : "text-slate-500 dark:text-subtle-foreground"
               }`}
             >
               My Friends ({friends?.length || 0})
@@ -236,11 +234,11 @@ const FriendsTab = () => {
             <Ionicons
               name="mail-unread-outline"
               size={16}
-              color={activeTab === "requests" ? "#0D0D0F" : "#A0A0A5"}
+              color={activeTab === "requests" ? "#FFFFFF" : "#8E8E93"}
             />
             <Text
               className={`text-sm font-semibold ${
-                activeTab === "requests" ? "text-surface-dark" : "text-subtle-foreground"
+                activeTab === "requests" ? "text-white" : "text-slate-500 dark:text-subtle-foreground"
               }`}
             >
               Requests
@@ -261,15 +259,15 @@ const FriendsTab = () => {
         <View className="flex-1 px-5">
           {isLoadingFriends || isCreatingChat ? (
             <View className="flex-1 items-center justify-center">
-              <ActivityIndicator size="large" color="#F4A261" />
+              <ActivityIndicator size="large" color="#007AFF" />
             </View>
           ) : !friends || friends.length === 0 ? (
             <View className="flex-1 items-center justify-center px-6">
-              <View className="w-16 h-16 rounded-full bg-surface-card items-center justify-center mb-4">
-                <Ionicons name="people-outline" size={32} color="#F4A261" />
+              <View className="w-16 h-16 rounded-full bg-white dark:bg-surface-card items-center justify-center mb-4 border border-slate-200 dark:border-surface-light">
+                <Ionicons name="people-outline" size={32} color="#007AFF" />
               </View>
-              <Text className="text-foreground text-lg font-semibold">No friends yet</Text>
-              <Text className="text-muted-foreground text-sm mt-1.5 text-center leading-5">
+              <Text className="text-slate-900 dark:text-foreground text-lg font-semibold">No friends yet</Text>
+              <Text className="text-slate-500 dark:text-muted-foreground text-sm mt-1.5 text-center leading-5">
                 Search for someone's @username above or switch to Requests to connect and start chatting!
               </Text>
             </View>
@@ -308,7 +306,7 @@ const FriendsTab = () => {
           {/* INCOMING REQUESTS */}
           <View className="mb-6">
             <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-foreground text-sm font-semibold uppercase tracking-wider">
+              <Text className="text-slate-900 dark:text-foreground text-sm font-semibold uppercase tracking-wider">
                 INCOMING REQUESTS
               </Text>
               {incomingRequests.length > 0 && (
@@ -321,11 +319,11 @@ const FriendsTab = () => {
             </View>
 
             {isLoadingRequests ? (
-              <ActivityIndicator size="small" color="#F4A261" />
+              <ActivityIndicator size="small" color="#007AFF" />
             ) : incomingRequests.length === 0 ? (
-              <View className="bg-surface-card rounded-2xl p-6 items-center border border-surface-light">
-                <Ionicons name="checkmark-done-circle-outline" size={36} color="#6B6B70" />
-                <Text className="text-muted-foreground text-sm mt-2 font-medium">
+              <View className="bg-white dark:bg-surface-card rounded-2xl p-6 items-center border border-slate-200 dark:border-surface-light">
+                <Ionicons name="checkmark-done-circle-outline" size={36} color="#8E8E93" />
+                <Text className="text-slate-500 dark:text-muted-foreground text-sm mt-2 font-medium">
                   No incoming friend requests
                 </Text>
               </View>

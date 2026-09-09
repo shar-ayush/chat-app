@@ -89,8 +89,16 @@ export async function decryptMessage(payload: {
   ciphertext: string;
   nonce: string;
   senderPublicKey: string;
-}): Promise<string> {
-  const { secretKey: mySecretKeyB64 } = await getKeyPair();
+}, currentUserId?: string): Promise<string> {
+  let keypair;
+  try {
+    keypair = await getKeyPair(currentUserId);
+  } catch (keyErr: any) {
+    console.error("[decryptMessage] KeyPair error:", keyErr?.message);
+    throw keyErr;
+  }
+
+  const { secretKey: mySecretKeyB64, publicKey: myPublicKeyB64 } = keypair;
 
   const mySecretKey = decodeBase64(mySecretKeyB64);
   const senderPublicKey = decodeBase64(payload.senderPublicKey);
@@ -104,6 +112,9 @@ export async function decryptMessage(payload: {
     mySecretKey
   );
 
-  if (!decrypted) throw new Error('Decryption failed — message may be tampered with.');
+  if (!decrypted) {
+    console.error("[decryptMessage] nacl.box.open returned null! senderPublicKey:", payload.senderPublicKey?.slice(0, 10), "myPublicKey:", myPublicKeyB64?.slice(0, 10));
+    throw new Error('Decryption failed — message may be tampered with.');
+  }
   return new TextDecoder().decode(decrypted);
 }

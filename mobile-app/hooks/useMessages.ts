@@ -31,10 +31,18 @@ export const useMessages = (chatId: string) => {
                   ciphertext: ciphertextToDecrypt,
                   nonce: nonceToDecrypt,
                   senderPublicKey: msg.sender_public_key,
-                });
-              } catch {
+                }, currentUser._id);
+              } catch (err: any) {
+                console.error("[useMessages] Decryption failed for message:", msg.id, "error:", err?.message);
                 text = "[Decryption Failed]";
               }
+            } else {
+              console.warn("[useMessages] Missing decryption fields for message:", msg.id, {
+                hasCiphertext: !!ciphertextToDecrypt,
+                hasNonce: !!nonceToDecrypt,
+                hasSenderPubKey: !!msg.sender_public_key,
+                isFromCurrentUser,
+              });
             }
           }
 

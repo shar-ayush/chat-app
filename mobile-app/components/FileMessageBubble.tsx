@@ -201,14 +201,15 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
     }
   };
 
-  const bubbleBase = `max-w-[85%] rounded-2xl overflow-hidden justify-center items-center ${isFromMe
+  const bubbleContainerStyle = `max-w-[85%] rounded-2xl overflow-hidden ${isFromMe
     ? "bg-primary rounded-br-sm"
-    : "bg-surface-card rounded-bl-sm border border-surface-light"
+    : "bg-[#E9E9EB] dark:bg-[#262628] rounded-bl-sm border border-slate-200/50 dark:border-surface-light/30"
     }`;
+  const bubbleBase = bubbleContainerStyle;
 
-  const textColor = isFromMe ? "text-surface-dark" : "text-foreground";
-  const mutedColor = isFromMe ? "text-surface-dark/70" : "text-muted-foreground";
-  const accentColor = isFromMe ? "#0D0D0F" : "#F4A261";
+  const textColor = isFromMe ? "text-white" : "text-slate-900 dark:text-foreground";
+  const mutedColor = isFromMe ? "text-white/80" : "text-slate-500 dark:text-muted-foreground";
+  const accentColor = isFromMe ? "#FFFFFF" : "#007AFF";
 
   // Full-Screen Image Modal 
   const FullScreenModal = () => (
@@ -550,7 +551,7 @@ function DownloadCard({
   alreadyDownloaded,
   actionText,
 }: DownloadCardProps) {
-  const accentColor = isFromMe ? "#0D0D0F" : "#F4A261";
+  const accentColor = isFromMe ? "#FFFFFF" : "#007AFF";
 
   if (downloadState === "checking") {
     return (

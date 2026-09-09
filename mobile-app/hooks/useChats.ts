@@ -29,10 +29,16 @@ export const useChats = () => {
                   ciphertext: payload.ciphertext,
                   nonce: payload.nonce,
                   senderPublicKey: chat.lastMessage.senderPublicKey,
-                });
-              } catch {
+                }, currentUser?._id);
+              } catch (err: any) {
+                console.error("[useChats] Decryption failed for chat:", chat._id, "error:", err?.message);
                 text = "[Encrypted message]";
               }
+            } else if (chat.lastMessage && !chat.lastMessage.text) {
+              console.warn("[useChats] Missing payload or senderPublicKey for chat:", chat._id, {
+                hasPayload: !!payload,
+                hasSenderPubKey: !!chat.lastMessage?.senderPublicKey,
+              });
             }
 
             const formattedChat = {
@@ -42,14 +48,20 @@ export const useChats = () => {
                 : null,
             };
 
-            // Cache to local SQLite in background for offline cold boot
-            upsertLocalChat(formattedChat).catch((err) => {
-              console.warn("Failed to cache chat in SQLite:", err);
-            });
-
             return formattedChat;
           })
         );
+
+        // Cache to local SQLite sequentially in background for offline cold boot
+        (async () => {
+          for (const c of decryptedChats) {
+            try {
+              await upsertLocalChat(c);
+            } catch (err) {
+              console.warn("Failed to cache chat in SQLite:", err);
+            }
+          }
+        })();
 
         return decryptedChats;
       } catch (networkError) {

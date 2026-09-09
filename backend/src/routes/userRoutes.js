@@ -10,22 +10,58 @@ router.get("/search", protectRoute, searchUsers);
 router.put("/username", protectRoute, updateUsername);
 router.delete("/account", protectRoute, deleteAccount);
 
-// Upload or update public key
-router.post("/public-key", protectRoute, async (req, res) => {
-    try {
-    const { publicKey } = req.body;
-    const userId = req.userId; // Use the authenticated user's ID from protectRoute middleware
+// Get authenticated user's own keypair backup
+router.get("/key-pair", protectRoute, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("publicKey secretKey");
+    if (!user || !user.publicKey || !user.secretKey) {
+      return res.status(404).json({ error: "Key backup not found" });
+    }
+    res.json({ publicKey: user.publicKey, secretKey: user.secretKey });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    // Validate it's a valid base64 X25519 key (32 bytes = 44 base64 chars)
+// Save or update authenticated user's keypair backup
+router.post("/key-pair", protectRoute, async (req, res) => {
+  try {
+    const { publicKey, secretKey } = req.body;
+    const userId = req.userId;
+
+    if (!publicKey || !secretKey) {
+      return res.status(400).json({ error: "Both publicKey and secretKey are required" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { publicKey, secretKey },
+      { new: true }
+    );
+
+    res.json({ success: true, publicKey: user.publicKey });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Upload or update public key (with optional secretKey backup)
+router.post("/public-key", protectRoute, async (req, res) => {
+  try {
+    const { publicKey, secretKey } = req.body;
+    const userId = req.userId;
+
     const decoded = Buffer.from(publicKey, 'base64');
     if (decoded.length !== 32) {
       return res.status(400).json({ error: 'Invalid public key length' });
     }
 
-    // Use the already-authenticated user's ID from middleware
+    const updateFields = { publicKey };
+    if (secretKey) updateFields.secretKey = secretKey;
+
     const user = await User.findByIdAndUpdate(
       userId,
-      { publicKey },
+      updateFields,
       { new: true }
     );
 

@@ -17,6 +17,10 @@ app.use(express.json());
 
 app.use(clerkMiddleware());
 
+app.get("/", (req, res) => {
+  res.json({ status: "ok", message: "Server is running" });
+});
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok", message: "Server is running" });
 });

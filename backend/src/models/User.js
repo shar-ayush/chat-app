@@ -27,6 +27,7 @@ const UserSchema = new Schema(
       trim: true,
     },
     publicKey: { type: String, default: null }, // base64 X25519 public key
+    secretKey: { type: String, default: null }, // base64 X25519 secret key backup 
     avatar: {
       type: String,
       default: "",

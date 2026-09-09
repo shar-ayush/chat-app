@@ -5,7 +5,7 @@ import { Message } from "../models/Message.js";
 import { Chat } from "../models/Chat.js";
 import { User } from "../models/User.js";
 import 'dotenv/config'
-import { addMessageToBuffer, flushChat } from "./messageBuffer.js";
+import { addMessageToBuffer, flushChat, getBufferedMessages } from "./messageBuffer.js";
 import { generateUniqueUsername } from "./username.js";
 import { Types } from "mongoose";
 import crypto from "crypto";
@@ -20,8 +20,8 @@ export const initializeSocket = (httpServer) => {
   const io = new SocketServer(httpServer, {
     cors: { origin: "*", methods: ["GET", "POST"] },
     transports: ["websocket", "polling"],
-    pingInterval: 10000,
-    pingTimeout: 5000,
+    pingInterval: 25000,
+    pingTimeout: 20000,
   });
 
   ioInstance = io;
@@ -345,7 +345,8 @@ export const initializeSocket = (httpServer) => {
       }
     });
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", (reason) => {
+      console.log(`[Socket] User ${userId} disconnected (${socket.id}), reason:`, reason);
       const userSockets = onlineUsers.get(userId);
       if (userSockets) {
         userSockets.delete(socket.id);

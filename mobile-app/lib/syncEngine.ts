@@ -1,13 +1,25 @@
 import NetInfo from "@react-native-community/netinfo";
-import { useSocketStore } from "./socket";
 import { getOldestPendingMessage, updateMessageStatus, resetSendingToPending, getPendingActions, deletePendingAction } from "../db/messageQueries";
+
+type SocketContext = { socket: any; queryClient: any };
+type SocketProvider = () => SocketContext;
+let socketProvider: SocketProvider | null = null;
+
+export const setSocketProvider = (provider: SocketProvider) => {
+  socketProvider = provider;
+};
+
+const getSocketContext = (): SocketContext => {
+  if (socketProvider) return socketProvider();
+  return { socket: null, queryClient: null };
+};
 
 let isProcessing = false;
 
 export const processQueueSequentially = async () => {
   if (isProcessing) return; // Prevent concurrent processing
   
-  const { socket, queryClient } = useSocketStore.getState();
+  const { socket, queryClient } = getSocketContext();
   if (!socket?.connected) return; // Socket disconnected, pause queue
 
   isProcessing = true;
@@ -108,7 +120,7 @@ let isProcessingActions = false;
 
 export const processActionsSequentially = async () => {
   if (isProcessingActions) return;
-  const { socket, queryClient } = useSocketStore.getState();
+  const { socket, queryClient } = getSocketContext();
   if (!socket?.connected) return;
 
   isProcessingActions = true;

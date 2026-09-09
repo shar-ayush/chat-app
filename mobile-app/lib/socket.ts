@@ -5,7 +5,7 @@ import { Chat, MessageSender, User } from "@/types";
 import { encryptMessage, decryptMessage } from "@/crypto/messageCrypto";
 import * as Crypto from 'expo-crypto';
 import { insertMessage, markMessagesDeletedForEveryoneLocal, insertPendingAction } from "../db/messageQueries";
-import { triggerSync } from "./syncEngine";
+import { triggerSync, setSocketProvider } from "./syncEngine";
 import { getDb } from "../db/database";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -460,4 +460,9 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       triggerSync();
     }
   },
+}));
+
+setSocketProvider(() => ({
+  socket: useSocketStore.getState().socket,
+  queryClient: useSocketStore.getState().queryClient,
 }));

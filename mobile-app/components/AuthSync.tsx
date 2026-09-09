@@ -1,6 +1,6 @@
 import { useAuthCallback } from "@/hooks/useAuth";
 import { useEffect, useRef } from "react";
-import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/expo";
 import { initializeKeyPair } from "@/crypto/keyManager";
 
 

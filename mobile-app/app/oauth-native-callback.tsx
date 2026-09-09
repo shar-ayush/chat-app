@@ -1,6 +1,6 @@
 import { ActivityIndicator, View } from "react-native";
 import { Redirect } from "expo-router";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/expo";
 
 export default function OAuthNativeCallbackScreen() {
   const { isSignedIn, isLoaded } = useAuth();

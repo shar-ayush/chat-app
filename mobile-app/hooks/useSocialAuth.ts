@@ -1,4 +1,4 @@
-import { useSSO } from "@clerk/clerk-expo";
+import { useSSO } from "@clerk/expo";
 import { useState } from "react";
 import { Alert } from "react-native";
 import * as AuthSession from "expo-auth-session";

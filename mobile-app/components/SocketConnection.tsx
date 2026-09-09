@@ -1,5 +1,5 @@
 import { useSocketStore } from "@/lib/socket";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/expo";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useNetworkSync } from "@/hooks/useNetworkSync";
@@ -15,9 +15,11 @@ const SocketConnection = () => {
 
   useEffect(() => {
     if (isSignedIn) {
-      getToken().then((token) => {
-        if (token) connect(token, queryClient);
-      });
+      getToken()
+        .then((token) => {
+          if (token) connect(token, queryClient);
+        })
+        .catch(() => {});
     } else disconnect();
 
     return () => {

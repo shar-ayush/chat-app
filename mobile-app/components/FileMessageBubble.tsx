@@ -17,9 +17,24 @@ import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import * as Sharing from "expo-sharing";
 import { Ionicons } from "@expo/vector-icons";
-import * as MediaLibrary from "expo-media-library";
 import { getCachedFile, downloadAndCache, formatFileSize } from "@/lib/fileCache";
 import { Message } from "@/types";
+
+// Safe dynamic resolution for MediaLibrary to prevent crashes on clients lacking ExpoMediaLibraryNext
+let MediaLibrary: {
+  requestPermissionsAsync?: () => Promise<{ status: string }>;
+  saveToLibraryAsync?: (uri: string) => Promise<any>;
+} | null = null;
+
+try {
+  MediaLibrary = require("expo-media-library/legacy");
+} catch {
+  try {
+    MediaLibrary = require("expo-media-library");
+  } catch {
+    MediaLibrary = null;
+  }
+}
 
 interface Props {
   message: Message;
@@ -126,14 +141,25 @@ export default function FileMessageBubble({ message, isFromMe }: Props) {
       }
 
       if (type === "gallery" && (isImage || isVideo)) {
-        const { status } = await MediaLibrary.requestPermissionsAsync();
-        if (status !== "granted") {
-          Alert.alert("Permission Required", "Please allow media access in Settings to save to gallery.");
-          setIsSaving(false);
-          return;
+        if (MediaLibrary?.requestPermissionsAsync && MediaLibrary?.saveToLibraryAsync) {
+          const { status } = await MediaLibrary.requestPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert("Permission Required", "Please allow media access in Settings to save to gallery.");
+            setIsSaving(false);
+            return;
+          }
+          await MediaLibrary.saveToLibraryAsync(uriToSave);
+          Alert.alert("Saved!", "Saved to your device gallery.");
+        } else {
+          const isAvailable = await Sharing.isAvailableAsync();
+          if (isAvailable) {
+            await Sharing.shareAsync(uriToSave, {
+              dialogTitle: `Save ${fileName || "file"}`,
+            });
+          } else {
+            Alert.alert("Unavailable", "Media library saving is not supported in this environment.");
+          }
         }
-        await MediaLibrary.saveToLibraryAsync(uriToSave);
-        Alert.alert("Saved!", "Saved to your device gallery.");
       } else {
         if (Platform.OS === "android") {
           try {

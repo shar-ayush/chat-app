@@ -29,7 +29,7 @@ import {
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/expo";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -90,6 +90,8 @@ const ChatDetailScreen = () => {
           console.log("Key initialization deferred (offline):", err.message);
         });
       }
+    }).catch((err) => {
+      console.log("getToken deferred (offline):", err?.message);
     });
   }, [currentUser, getToken]);
 
@@ -251,7 +253,7 @@ const ChatDetailScreen = () => {
     mimeType: string;
     size: number;
   }) => {
-    const token = await getToken();
+    const token = await getToken().catch(() => null);
     if (!token || !currentUser) return;
 
     setUploadStatus("uploading");

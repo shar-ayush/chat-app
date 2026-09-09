@@ -1,9 +1,8 @@
 import axios from "axios";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/expo";
 import { useCallback } from "react";
 
-const API_URL = "https://chat-app-muyj.onrender.com/api";
-// const API_URL = "http://172.16.219.240:3000/api";
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -16,7 +15,7 @@ export const useApi = () => {
 
   const apiWithAuth = useCallback(
     async <T>(config: Parameters<typeof api.request>[0]) => {
-      const token = await getToken();
+      const token = await getToken().catch(() => null);
       return api.request<T>({
         ...config,
         headers: { ...config.headers, ...(token && { Authorization: `Bearer ${token}` }) },

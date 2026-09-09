@@ -9,6 +9,7 @@ import { useChatApi } from "@/lib/chatApi";
 import { initializeKeyPair } from "@/crypto/keyManager";
 import { uploadFile } from "@/lib/uploadService";
 import { markMessagesDeletedForMeLocal, markMessagesDeletedForEveryoneLocal } from "@/db/messageQueries";
+import { updateLocalChatLastMessage } from "@/db/chatQueries";
 import { MessageSender, Chat } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -95,19 +96,45 @@ const ChatDetailScreen = () => {
     });
   }, [currentUser, getToken]);
 
-  // join chat room on mount, leave on unmount
+  // join chat room on mount, leave on unmount, and mark as read
   useEffect(() => {
-    if (chatId && isConnected) {
-      joinChat(chatId);
-      markMessagesAsRead(chatId, queryClient).catch((err) => {
-        console.log("Failed to mark as read:", err.message);
-      });
+    if (!chatId) return;
+
+    useSocketStore.getState().joinChat(chatId);
+
+    // Mark as read immediately on entering chat
+    markMessagesAsRead(chatId, queryClient).catch((err) => {
+      console.log("Failed to mark as read via HTTP:", err?.message);
+    });
+
+    const socket = useSocketStore.getState().socket;
+    if (socket?.connected) {
+      socket.emit("mark_read", { chatId });
     }
 
     return () => {
-      if (chatId) leaveChat(chatId);
+      useSocketStore.getState().leaveChat(chatId);
     };
-  }, [chatId, isConnected, joinChat, leaveChat]);
+  }, [chatId]);
+
+  const messagesCount = messages?.length ?? 0;
+  const currentUserId = currentUser?._id;
+
+  // Mark as read whenever new incoming messages arrive while user is active in the chat
+  useEffect(() => {
+    if (!chatId || !messages || messages.length === 0 || !currentUserId) return;
+
+    const lastMsg = messages[messages.length - 1];
+    const senderId = typeof lastMsg.sender === "object" ? (lastMsg.sender as any)._id : lastMsg.sender;
+
+    if (senderId !== currentUserId) {
+      markMessagesAsRead(chatId, queryClient).catch(() => {});
+      const socket = useSocketStore.getState().socket;
+      if (socket?.connected) {
+        socket.emit("mark_read", { chatId });
+      }
+    }
+  }, [chatId, messagesCount, currentUserId]);
 
   // scroll to bottom when new messages arrive
   useEffect(() => {
@@ -158,6 +185,19 @@ const ChatDetailScreen = () => {
     const remainingMessages = messages?.filter(m => !selectedMessages.includes(m._id || (m as any).id)) || [];
     const newLastMessage = remainingMessages.length > 0 ? remainingMessages[remainingMessages.length - 1] : null;
 
+    if (newLastMessage) {
+      updateLocalChatLastMessage(
+        chatId,
+        {
+          id: newLastMessage._id || (newLastMessage as any).id,
+          text: newLastMessage.text,
+          sender: typeof newLastMessage.sender === 'object' ? newLastMessage.sender._id : newLastMessage.sender,
+          createdAt: newLastMessage.createdAt,
+        },
+        false
+      ).catch(() => {});
+    }
+
     queryClient.setQueryData<Chat[]>(["chats"], (oldChats) => {
       return oldChats?.map(c => {
         if (c._id === chatId) {
@@ -185,6 +225,18 @@ const ChatDetailScreen = () => {
   const handleDeleteForEveryone = async () => {
     if (!currentUser) return;
     await markMessagesDeletedForEveryoneLocal(selectedMessages);
+
+    // Update local SQLite chats preview to tombstone if the deleted message was the last message
+    updateLocalChatLastMessage(
+      chatId,
+      {
+        id: selectedMessages[0],
+        text: "🚫 This message was deleted",
+        sender: currentUser._id,
+        createdAt: new Date().toISOString(),
+      },
+      false
+    ).catch(() => {});
 
     // Optimistic update for homescreen (shows tombstone)
     queryClient.setQueryData<Chat[]>(["chats"], (oldChats) => {

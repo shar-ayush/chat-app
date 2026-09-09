@@ -56,8 +56,23 @@ export const initDb = async () => {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS chats (
+      id TEXT PRIMARY KEY,
+      participant_id TEXT NOT NULL,
+      participant_name TEXT NOT NULL,
+      participant_email TEXT,
+      participant_avatar TEXT,
+      last_message_id TEXT,
+      last_message_text TEXT,
+      last_message_sender TEXT,
+      last_message_at TEXT,
+      unread_count INTEGER DEFAULT 0,
+      created_at TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_messages_chat_status ON messages(chat_id, status);
     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+    CREATE INDEX IF NOT EXISTS idx_chats_last_message_at ON chats(last_message_at);
   `);
 
   // Safety: add new columns on existing tables that may have skipped the migration
@@ -73,6 +88,7 @@ export const initDb = async () => {
     ["is_deleted", "INTEGER DEFAULT 0"],
     ["deleted_at", "INTEGER"],
     ["deleted_for", "TEXT"],
+    ["is_read", "INTEGER DEFAULT 0"],
   ];
   for (const [col, def] of newColumns) {
     try {

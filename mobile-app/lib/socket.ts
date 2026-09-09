@@ -5,6 +5,7 @@ import { Chat, MessageSender, User } from "@/types";
 import { encryptMessage, decryptMessage } from "@/crypto/messageCrypto";
 import * as Crypto from 'expo-crypto';
 import { insertMessage, markMessagesDeletedForEveryoneLocal, insertPendingAction } from "../db/messageQueries";
+import { updateLocalChatLastMessage, markLocalChatAsRead } from "../db/chatQueries";
 import { triggerSync, setSocketProvider } from "./syncEngine";
 import { getDb } from "../db/database";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -91,7 +92,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           for (const msg of missedMessages) {
             const senderId = typeof msg.sender === 'object' ? msg.sender._id : msg.sender;
             await insertMessage({
-              id: msg.localId || Crypto.randomUUID(),
+              id: msg.localId || msg._id || Crypto.randomUUID(),
               chat_id: msg.chat,
               sender_id: senderId,
               type: msg.type ?? 'text',
@@ -127,6 +128,16 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       } catch (err) {
         console.error("Failed to pull sync messages:", err);
       }
+    });
+
+    socket.on("messages_read", ({ chatId }: { chatId: string }) => {
+      set((state) => {
+        const unreadChats = new Set(state.unreadChats);
+        unreadChats.delete(chatId);
+        return { unreadChats };
+      });
+      markLocalChatAsRead(chatId).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ["chats"] });
     });
 
     socket.on("disconnect", () => {
@@ -251,6 +262,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         typingUsers.delete(message.chat);
         return { typingUsers: typingUsers };
       });
+
+      // Update local SQLite chat preview
+      updateLocalChatLastMessage(
+        message.chat,
+        {
+          id: message._id || message.localId || Crypto.randomUUID(),
+          text: plaintext,
+          sender: senderId,
+          createdAt: message.createdAt || new Date().toISOString(),
+        },
+        currentChatId !== message.chat
+      ).catch(() => {});
     });
 
     // Handle new-message from sender's perspective (when sender makes request from another device, etc)
@@ -282,6 +305,17 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           if (!oldChats) return oldChats;
           return oldChats.map(c => {
             if (c.lastMessage && (messageIds.includes(c.lastMessage._id) || messageIds.includes((c.lastMessage as any).id))) {
+              updateLocalChatLastMessage(
+                c._id,
+                {
+                  id: c.lastMessage._id,
+                  text: "🚫 This message was deleted",
+                  sender: c.lastMessage.sender,
+                  createdAt: c.lastMessage.createdAt,
+                },
+                false
+              ).catch(() => {});
+
               return {
                 ...c,
                 lastMessage: { ...c.lastMessage, isDeleted: true, text: "" }
@@ -333,20 +367,25 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
   },
   joinChat: (chatId) => {
-    const socket = get().socket;
-    set((state) => {
-      const unreadChats = new Set(state.unreadChats);
-      unreadChats.delete(chatId);
-      return { currentChatId: chatId, unreadChats: unreadChats };
-    });
+    const { socket, currentChatId } = get();
+    if (currentChatId !== chatId) {
+      set((state) => {
+        const unreadChats = new Set(state.unreadChats);
+        unreadChats.delete(chatId);
+        return { currentChatId: chatId, unreadChats: unreadChats };
+      });
+      markLocalChatAsRead(chatId).catch(() => {});
+    }
 
     if (socket?.connected) {
       socket.emit("join-chat", chatId);
     }
   },
   leaveChat: (chatId) => {
-    const { socket } = get();
-    set({ currentChatId: null });
+    const { socket, currentChatId } = get();
+    if (currentChatId !== null) {
+      set({ currentChatId: null });
+    }
     if (socket?.connected) {
       socket.emit("leave-chat", chatId);
     }
@@ -402,6 +441,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           return chat;
         });
       });
+
+      // Update local SQLite chat preview
+      updateLocalChatLastMessage(
+        chatId,
+        {
+          id: localId,
+          text: `📎 ${filePayload.fileName || "File"}`,
+          sender: currentUser._id,
+          createdAt: new Date().toISOString(),
+        },
+        false
+      ).catch(() => {});
 
       // Emit via socket (backend stores only metadata, no re-upload)
       if (socket?.connected) {
@@ -466,6 +517,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           return chat;
         });
       });
+
+      // Update local SQLite chat preview
+      updateLocalChatLastMessage(
+        chatId,
+        {
+          id: localId,
+          text: text,
+          sender: currentUser._id,
+          createdAt: new Date().toISOString(),
+        },
+        false
+      ).catch(() => {});
 
       // Trigger sync engine to push to backend
       triggerSync();

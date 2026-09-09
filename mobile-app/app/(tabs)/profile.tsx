@@ -65,6 +65,7 @@ const ProfileTab = () => {
                   const db = await getDb();
                   await db.runAsync("DELETE FROM messages;");
                   await db.runAsync("DELETE FROM pending_actions;");
+                  await db.runAsync("DELETE FROM chats;");
                   await AsyncStorage.clear();
                   disconnect();
                   await signOut();

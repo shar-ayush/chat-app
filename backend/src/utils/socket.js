@@ -7,6 +7,7 @@ import { User } from "../models/User.js";
 import 'dotenv/config'
 import { addMessageToBuffer, flushChat } from "./messageBuffer.js";
 import { generateUniqueUsername } from "./username.js";
+import { Types } from "mongoose";
 import crypto from "crypto";
 
 // Map of userId -> Set of socket IDs
@@ -240,6 +241,50 @@ export const initializeSocket = (httpServer) => {
       }
     });
 
+    socket.on("mark_read", async ({ chatId }) => {
+      if (!chatId) return;
+      try {
+        const senderFilter = Types.ObjectId.isValid(userId)
+          ? { $ne: new Types.ObjectId(userId) }
+          : { $ne: userId };
+
+        await Message.updateMany(
+          {
+            chat: chatId,
+            sender: senderFilter,
+            readBy: { $nin: [userId] },
+          },
+          { $addToSet: { readBy: userId } }
+        );
+
+        const buffered = getBufferedMessages(chatId.toString());
+        if (buffered && buffered.length > 0) {
+          buffered.forEach((msg) => {
+            const senderId =
+              typeof msg.sender === "object" && msg.sender._id
+                ? msg.sender._id.toString()
+                : msg.sender.toString();
+            if (senderId !== userId && !msg.readBy.includes(userId)) {
+              msg.readBy.push(userId);
+            }
+          });
+        }
+
+        socket.to(`chat:${chatId}`).emit("messages_read", { chatId, readerId: userId });
+
+        const chat = await Chat.findById(chatId);
+        if (chat) {
+          for (const participantId of chat.participants) {
+            if (participantId.toString() !== userId) {
+              io.to(`user:${participantId}`).emit("messages_read", { chatId, readerId: userId });
+            }
+          }
+        }
+      } catch (error) {
+        console.error("mark_read socket error:", error);
+      }
+    });
+
     socket.on("delete_for_me", async ({ messageIds, chatId, userId: reqUserId }) => {
       if (reqUserId !== userId) return;
       
@@ -248,7 +293,10 @@ export const initializeSocket = (httpServer) => {
         // messageIds are likely localIds from frontend, or server _ids
         await Message.updateMany(
           { $or: [{ localId: { $in: messageIds } }, { _id: { $in: messageIds } }] },
-          { $addToSet: { deletedFor: userId } }
+          { 
+            $addToSet: { deletedFor: userId },
+            $set: { updatedAt: new Date() }
+          }
         );
         socket.emit("messages_deleted_for_me", { messageIds });
       } catch (error) {
@@ -276,7 +324,7 @@ export const initializeSocket = (httpServer) => {
 
         await Message.updateMany(
           { _id: { $in: messages.map(m => m._id) } },
-          { $set: { isDeleted: true, deletedAt: new Date() } }
+          { $set: { isDeleted: true, deletedAt: new Date(), updatedAt: new Date() } }
         );
 
         const mongoIds = messages.map(m => m._id.toString());

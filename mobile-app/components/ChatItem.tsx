@@ -11,8 +11,10 @@ const ChatItem = ({ chat, onPress }: { chat: Chat; onPress: () => void }) => {
 
   const isOnline = onlineUsers.has(participant._id);
   const isTyping = typingUsers.get(chat._id) === participant._id;
-  const hasUnread = unreadChats.has(chat._id) || (chat.unreadCount && chat.unreadCount > 0) ? true : false;
-  const unreadCount = hasUnread ? Math.max(chat.unreadCount ?? 0, 1) : 0;
+  const hasUnread = (chat.unreadCount && chat.unreadCount > 0) || unreadChats.has(chat._id);
+  const unreadCount = (chat.unreadCount && chat.unreadCount > 0) 
+    ? chat.unreadCount 
+    : (unreadChats.has(chat._id) ? 1 : 0);
 
   return (
     <Pressable className="flex-row items-center py-3 active:opacity-70" onPress={onPress}>

@@ -21,12 +21,12 @@ const AuthSync = () => {
           try {
             const token = await getToken();
             if (!token) {
-              // console.error("Failed to get auth token");
               return;
             }
-            // console.log("Starting E2E keypair initialization for user:", user.id);
-            await initializeKeyPair(user.id, token);
-            // console.log("E2E keypair initialized successfully");
+            // Initialize E2E keypair with MongoDB user _id immediately on login/signup
+            if (data?._id) {
+              await initializeKeyPair(data._id, token);
+            }
           } catch (e) {
             // console.error("E2E key init failed:", e instanceof Error ? e.message : e);
             // Don't throw - allow user to continue even if E2E setup fails

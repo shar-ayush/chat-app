@@ -31,7 +31,7 @@ export default function UploadProgressBar({
     status === "failed" ? "#EF4444" : status === "success" ? "#22C55E" : "#007AFF";
 
   return (
-    <View className="mx-3 mb-2 px-3 py-2 bg-surface-card rounded-2xl border border-surface-light">
+    <View className="mx-3 mb-2 px-3 py-2 bg-white dark:bg-surface-card rounded-2xl border border-slate-200 dark:border-surface-light shadow-sm dark:shadow-none">
       <View className="flex-row items-center gap-2 mb-1.5">
         <Ionicons
           name={
@@ -44,7 +44,7 @@ export default function UploadProgressBar({
           size={16}
           color={barColor}
         />
-        <Text className="text-foreground text-xs flex-1 font-medium" numberOfLines={1}>
+        <Text className="text-slate-900 dark:text-foreground text-xs flex-1 font-medium" numberOfLines={1}>
           {fileName}
         </Text>
         {status === "uploading" && onCancel && (
@@ -55,14 +55,14 @@ export default function UploadProgressBar({
         {status === "failed" && onRetry && (
           <Pressable onPress={onRetry} className="flex-row items-center gap-1">
             <Ionicons name="refresh" size={14} color="#007AFF" />
-            <Text className="text-primary text-xs">Retry</Text>
+            <Text className="text-primary text-xs font-semibold">Retry</Text>
           </Pressable>
         )}
       </View>
 
       {/* Progress bar */}
       {status !== "success" && (
-        <View className="h-1 rounded-full bg-surface-light overflow-hidden">
+        <View className="h-1 rounded-full bg-slate-200 dark:bg-surface-light overflow-hidden">
           <Animated.View
             style={{
               flex: 1,
@@ -77,7 +77,7 @@ export default function UploadProgressBar({
         </View>
       )}
 
-      <Text className="text-muted-foreground text-xs mt-1">
+      <Text className="text-slate-500 dark:text-muted-foreground text-xs mt-1">
         {status === "uploading"
           ? `${Math.round(progress * 100)}%`
           : status === "success"

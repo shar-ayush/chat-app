@@ -349,7 +349,7 @@ const NewChatScreen = () => {
                   {incomingRequests.map((req) => (
                     <View
                       key={req._id}
-                      className="bg-slate-50 dark:bg-surface-card rounded-2xl p-3.5 mb-2.5 border border-slate-200/60 dark:border-surface-light flex-row items-center justify-between"
+                      className="bg-white dark:bg-surface-card rounded-2xl p-3.5 mb-2.5 border border-slate-200 dark:border-surface-light flex-row items-center justify-between shadow-sm dark:shadow-none"
                     >
                       <View className="flex-row items-center flex-1 mr-2">
                         <Image
@@ -368,7 +368,7 @@ const NewChatScreen = () => {
 
                       <View className="flex-row items-center gap-2">
                         <Pressable
-                          className="w-8 h-8 rounded-full bg-red-500/10 dark:bg-red-500/20 items-center justify-center"
+                          className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-500/20 items-center justify-center active:opacity-70"
                           disabled={isRejectingRequest}
                           onPress={() => handleRejectRequest(req._id)}
                         >
@@ -391,13 +391,13 @@ const NewChatScreen = () => {
               {/* SENT PENDING REQUESTS */}
               {outgoingRequests.length > 0 && (
                 <View className="mb-6">
-                  <Text className="text-slate-400 dark:text-muted-foreground text-xs font-semibold uppercase tracking-wider mb-2">
+                  <Text className="text-slate-500 dark:text-muted-foreground text-xs font-semibold uppercase tracking-wider mb-2">
                     PENDING SENT REQUESTS ({outgoingRequests.length})
                   </Text>
                   {outgoingRequests.map((req) => (
                     <View
                       key={req._id}
-                      className="flex-row items-center py-2.5 border-b border-slate-100 dark:border-surface-light justify-between"
+                      className="flex-row items-center py-2.5 px-3 bg-white dark:bg-surface-card rounded-2xl mb-2 border border-slate-200 dark:border-surface-light justify-between shadow-sm dark:shadow-none"
                     >
                       <View className="flex-row items-center flex-1 mr-2">
                         <Image
@@ -408,13 +408,13 @@ const NewChatScreen = () => {
                           <Text className="text-slate-900 dark:text-foreground font-medium text-sm" numberOfLines={1}>
                             {req.recipient.name}
                           </Text>
-                          <Text className="text-slate-400 dark:text-subtle-foreground text-xs">
+                          <Text className="text-slate-500 dark:text-subtle-foreground text-xs">
                             @{req.recipient.username || "user"}
                           </Text>
                         </View>
                       </View>
-                      <View className="px-2.5 py-1 bg-slate-100 dark:bg-surface-card rounded-full border border-slate-200/60 dark:border-surface-light">
-                        <Text className="text-slate-500 dark:text-subtle-foreground text-xs">Pending</Text>
+                      <View className="px-2.5 py-1 bg-slate-100 dark:bg-surface rounded-full border border-slate-200 dark:border-surface-light">
+                        <Text className="text-slate-600 dark:text-subtle-foreground text-xs font-medium">Pending</Text>
                       </View>
                     </View>
                   ))}

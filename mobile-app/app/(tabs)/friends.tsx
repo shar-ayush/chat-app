@@ -331,7 +331,7 @@ const FriendsTab = () => {
               incomingRequests.map((req) => (
                 <View
                   key={req._id}
-                  className="bg-surface-card rounded-2xl p-3.5 mb-2.5 border border-surface-light flex-row items-center justify-between"
+                  className="bg-white dark:bg-surface-card rounded-2xl p-3.5 mb-2.5 border border-slate-200 dark:border-surface-light flex-row items-center justify-between shadow-sm dark:shadow-none"
                 >
                   <View className="flex-row items-center flex-1 mr-2">
                     <Image
@@ -339,7 +339,7 @@ const FriendsTab = () => {
                       style={{ width: 44, height: 44, borderRadius: 999 }}
                     />
                     <View className="ml-3 flex-1">
-                      <Text className="text-foreground font-semibold text-sm" numberOfLines={1}>
+                      <Text className="text-slate-900 dark:text-foreground font-semibold text-sm" numberOfLines={1}>
                         {req.sender.name}
                       </Text>
                       <Text className="text-primary text-xs font-medium mt-0.5">
@@ -350,7 +350,7 @@ const FriendsTab = () => {
 
                   <View className="flex-row items-center gap-2">
                     <Pressable
-                      className="w-8 h-8 rounded-full bg-red-500/20 items-center justify-center active:opacity-70"
+                      className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-500/20 items-center justify-center active:opacity-70"
                       disabled={isRejectingRequest}
                       onPress={() => handleRejectRequest(req._id)}
                     >
@@ -372,19 +372,19 @@ const FriendsTab = () => {
 
           {/* OUTGOING PENDING REQUESTS */}
           <View className="mb-6">
-            <Text className="text-muted-foreground text-xs font-semibold uppercase tracking-wider mb-3">
+            <Text className="text-slate-500 dark:text-muted-foreground text-xs font-semibold uppercase tracking-wider mb-3">
               PENDING SENT REQUESTS ({outgoingRequests.length})
             </Text>
 
             {outgoingRequests.length === 0 ? (
-              <View className="bg-surface-card rounded-2xl p-4 items-center border border-surface-light">
-                <Text className="text-subtle-foreground text-xs">No pending requests sent</Text>
+              <View className="bg-white dark:bg-surface-card rounded-2xl p-4 items-center border border-slate-200 dark:border-surface-light">
+                <Text className="text-slate-500 dark:text-subtle-foreground text-xs">No pending requests sent</Text>
               </View>
             ) : (
               outgoingRequests.map((req) => (
                 <View
                   key={req._id}
-                  className="flex-row items-center py-2.5 px-3 bg-surface-card rounded-2xl mb-2 border border-surface-light justify-between"
+                  className="flex-row items-center py-2.5 px-3 bg-white dark:bg-surface-card rounded-2xl mb-2 border border-slate-200 dark:border-surface-light justify-between shadow-sm dark:shadow-none"
                 >
                   <View className="flex-row items-center flex-1 mr-2">
                     <Image
@@ -392,16 +392,16 @@ const FriendsTab = () => {
                       style={{ width: 38, height: 38, borderRadius: 999 }}
                     />
                     <View className="ml-3 flex-1">
-                      <Text className="text-foreground font-medium text-sm" numberOfLines={1}>
+                      <Text className="text-slate-900 dark:text-foreground font-medium text-sm" numberOfLines={1}>
                         {req.recipient.name}
                       </Text>
-                      <Text className="text-subtle-foreground text-xs">
+                      <Text className="text-slate-500 dark:text-subtle-foreground text-xs">
                         @{req.recipient.username || "user"}
                       </Text>
                     </View>
                   </View>
-                  <View className="px-2.5 py-1 bg-surface rounded-full border border-surface-light">
-                    <Text className="text-subtle-foreground text-xs">Pending</Text>
+                  <View className="px-2.5 py-1 bg-slate-100 dark:bg-surface rounded-full border border-slate-200 dark:border-surface-light">
+                    <Text className="text-slate-600 dark:text-subtle-foreground text-xs font-medium">Pending</Text>
                   </View>
                 </View>
               ))

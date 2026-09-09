@@ -15,15 +15,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const healthHandler = (req, res) => {
+  if (req.method === "HEAD") {
+    return res.status(200).end();
+  }
+  res.status(200).json({ status: "ok", message: "Server is running" });
+};
+
+// Health endpoints explicitly supporting both GET and HEAD
+app.route("/health").get(healthHandler).head(healthHandler);
+app.route("/api/health").get(healthHandler).head(healthHandler);
+app.route("/").get(healthHandler).head(healthHandler);
+
 app.use(clerkMiddleware());
-
-app.get("/", (req, res) => {
-  res.json({ status: "ok", message: "Server is running" });
-});
-
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", message: "Server is running" });
-});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/chats", chatRoutes);

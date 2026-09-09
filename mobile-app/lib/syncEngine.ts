@@ -110,10 +110,12 @@ export const processQueueSequentially = async () => {
   }
 
   // Check if there are more pending messages
-  const nextMsg = await getOldestPendingMessage();
-  if (nextMsg && nextMsg.retry_count <= 5) {
-    processQueueSequentially();
-  }
+  try {
+    const nextMsg = await getOldestPendingMessage();
+    if (nextMsg && nextMsg.retry_count <= 5) {
+      processQueueSequentially().catch(() => {});
+    }
+  } catch {}
 };
 
 let isProcessingActions = false;
@@ -147,14 +149,21 @@ export const processActionsSequentially = async () => {
     isProcessingActions = false;
   }
 
-  const moreActions = await getPendingActions();
-  if (moreActions.length > 0) processActionsSequentially();
+  try {
+    const moreActions = await getPendingActions();
+    if (moreActions.length > 0) processActionsSequentially().catch(() => {});
+  } catch {}
 };
 
 // Start sync loop on net reconnect or app start
 export const triggerSync = async () => {
-  await resetSendingToPending(); // Reset stuck 'sending' to 'pending'
-  processQueueSequentially();
-  processActionsSequentially();
+  try {
+    await resetSendingToPending(); // Reset stuck 'sending' to 'pending'
+    processQueueSequentially().catch(() => {});
+    processActionsSequentially().catch(() => {});
+  } catch (err) {
+    console.warn("triggerSync error:", err);
+  }
 };
+
 

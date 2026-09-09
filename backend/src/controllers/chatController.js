@@ -1,7 +1,9 @@
 import { Chat } from "../models/Chat.js";
 import { Message } from "../models/Message.js";
+import { FriendRequest } from "../models/FriendRequest.js";
 import { Types } from "mongoose";
 import { getBufferedMessages } from "../utils/messageBuffer.js";
+import { getIO } from "../utils/socket.js";
 
 export async function getChats(req, res, next) {
   try {
@@ -16,21 +18,36 @@ export async function getChats(req, res, next) {
       chats.map(async (chat) => {
         const otherParticipant = chat.participants.find((p) => p._id.toString() !== userId);
         
+        const senderFilter = Types.ObjectId.isValid(userId)
+          ? { $ne: new Types.ObjectId(userId) }
+          : { $ne: userId };
+
         const unreadCount = await Message.countDocuments({
           chat: chat._id,
-          sender: { $ne: userId },
-          readBy: { $ne: userId }
+          sender: senderFilter,
+          readBy: { $nin: [userId] },
         });
 
-        // Merge buffered messages into the chat object
+        // Merge buffered messages into the chat object & calculate active unread
         let activeLastMessage = chat.lastMessage;
         let activeLastMessageAt = chat.lastMessageAt;
+        let activeUnreadCount = unreadCount;
         
         const buffered = getBufferedMessages(chat._id.toString());
         if (buffered.length > 0) {
           const latestBuffered = buffered[buffered.length - 1];
           activeLastMessage = latestBuffered;
           activeLastMessageAt = latestBuffered.createdAt;
+
+          for (const bMsg of buffered) {
+            const bSenderId = typeof bMsg.sender === "object" && bMsg.sender?._id
+              ? bMsg.sender._id.toString()
+              : bMsg.sender?.toString();
+            const isReadByMe = bMsg.readBy && bMsg.readBy.some((id) => id.toString() === userId);
+            if (bSenderId !== userId && !isReadByMe) {
+              activeUnreadCount++;
+            }
+          }
         }
 
         // If the current activeLastMessage was deleted for the user, dig deeper into DB
@@ -54,7 +71,7 @@ export async function getChats(req, res, next) {
           lastMessage: activeLastMessage,
           lastMessageAt: activeLastMessageAt,
           createdAt: chat.createdAt,
-          unreadCount
+          unreadCount: activeUnreadCount,
         };
       })
     );
@@ -93,6 +110,21 @@ export async function getOrCreateChat(req, res, next) {
       .populate("lastMessage");
 
     if (!chat) {
+      // Must be friends to initiate a new chat
+      const isFriend = await FriendRequest.exists({
+        status: "accepted",
+        $or: [
+          { sender: userId, recipient: participantId },
+          { sender: participantId, recipient: userId },
+        ],
+      });
+
+      if (!isFriend) {
+        return res.status(403).json({
+          message: "You must be accepted friends with this user to start chatting",
+        });
+      }
+
       const newChat = new Chat({ participants: [userId, participantId] });
       await newChat.save();
       chat = await newChat.populate("participants", "name email avatar");
@@ -156,12 +188,16 @@ export async function markMessagesAsRead(req, res, next) {
       return res.status(404).json({ message: "Chat not found" });
     }
 
+    const senderFilter = Types.ObjectId.isValid(userId)
+      ? { $ne: new Types.ObjectId(userId) }
+      : { $ne: userId };
+
     // Mark all unread messages as read
     const result = await Message.updateMany(
       {
         chat: chatId,
-        sender: { $ne: userId }, // Only mark messages from other users
-        readBy: { $ne: userId }  // Only mark messages not already read
+        sender: senderFilter, // Only mark messages from other users
+        readBy: { $nin: [userId] } // Only mark messages not already read
       },
       {
         $addToSet: { readBy: userId } // Add userId to readBy array
@@ -185,6 +221,17 @@ export async function markMessagesAsRead(req, res, next) {
           bufferUpdatedCount++;
         }
       });
+    }
+
+    // Broadcast messages_read event via socket
+    const io = getIO();
+    if (io) {
+      io.to(`chat:${chatId}`).emit("messages_read", { chatId, readerId: userId });
+      for (const participantId of chat.participants) {
+        if (participantId.toString() !== userId) {
+          io.to(`user:${participantId}`).emit("messages_read", { chatId, readerId: userId });
+        }
+      }
     }
 
     res.json({ 

@@ -1,26 +1,43 @@
 import * as SQLite from 'expo-sqlite';
-
-let dbInstance: SQLite.SQLiteDatabase | null = null;
-
-export const getDb = async () => {
-  if (dbInstance) return dbInstance;
-  
-  dbInstance = await SQLite.openDatabaseAsync('chat.db');
-  return dbInstance;
-};
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const initDb = async () => {
-  const db = await getDb();
-  
-  const version = await AsyncStorage.getItem("db_version");
-  if (version !== "3") {
-    // Migration: drop old table, update version
-    await db.execAsync("DROP TABLE IF EXISTS messages");
-    await AsyncStorage.removeItem('lastSyncTimestamp');
-    await AsyncStorage.setItem("db_version", "3");
+let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+
+export const getDb = async () => {
+  if (!dbPromise) {
+    dbPromise = SQLite.openDatabaseAsync('chat.db');
   }
+  return dbPromise;
+};
+
+// Global serial execution queue to eliminate concurrent prepareAsync/runAsync race conditions in expo-sqlite on Android
+let queryQueue = Promise.resolve<any>(undefined);
+
+export const runWithDb = async <T>(operation: (db: SQLite.SQLiteDatabase) => Promise<T>): Promise<T> => {
+  const db = await getDb();
+  return new Promise<T>((resolve, reject) => {
+    queryQueue = queryQueue
+      .catch(() => {}) // never let a previous query failure block subsequent queries
+      .then(async () => {
+        try {
+          const result = await operation(db);
+          resolve(result);
+        } catch (err) {
+          reject(err);
+        }
+      });
+  });
+};
+
+export const initDb = async () => {
+  return runWithDb(async (db) => {
+    const version = await AsyncStorage.getItem("db_version");
+    if (version !== "4") {
+      // Migration: drop stale local tables, reset sync timestamp
+      await db.execAsync("DROP TABLE IF EXISTS messages; DROP TABLE IF EXISTS chats;");
+      await AsyncStorage.removeItem('lastSyncTimestamp');
+      await AsyncStorage.setItem("db_version", "4");
+    }
 
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
@@ -56,8 +73,23 @@ export const initDb = async () => {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS chats (
+      id TEXT PRIMARY KEY,
+      participant_id TEXT NOT NULL,
+      participant_name TEXT NOT NULL,
+      participant_email TEXT,
+      participant_avatar TEXT,
+      last_message_id TEXT,
+      last_message_text TEXT,
+      last_message_sender TEXT,
+      last_message_at TEXT,
+      unread_count INTEGER DEFAULT 0,
+      created_at TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_messages_chat_status ON messages(chat_id, status);
     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+    CREATE INDEX IF NOT EXISTS idx_chats_last_message_at ON chats(last_message_at);
   `);
 
   // Safety: add new columns on existing tables that may have skipped the migration
@@ -73,6 +105,7 @@ export const initDb = async () => {
     ["is_deleted", "INTEGER DEFAULT 0"],
     ["deleted_at", "INTEGER"],
     ["deleted_for", "TEXT"],
+    ["is_read", "INTEGER DEFAULT 0"],
   ];
   for (const [col, def] of newColumns) {
     try {
@@ -83,4 +116,5 @@ export const initDb = async () => {
   }
 
   console.log('Database initialized successfully');
+  });
 };

@@ -19,7 +19,15 @@ const UserSchema = new Schema(
       lowercase: true,
       trim: true,
     },
+    username: {
+      type: String,
+      unique: true,
+      sparse: true,
+      lowercase: true,
+      trim: true,
+    },
     publicKey: { type: String, default: null }, // base64 X25519 public key
+    secretKey: { type: String, default: null }, // base64 X25519 secret key backup 
     avatar: {
       type: String,
       default: "",

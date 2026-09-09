@@ -7,8 +7,8 @@ export default function OAuthNativeCallbackScreen() {
 
   if (!isLoaded) {
     return (
-      <View className="flex-1 items-center justify-center bg-surface-dark">
-        <ActivityIndicator size="large" color="#F4A261" />
+      <View className="flex-1 items-center justify-center bg-white dark:bg-[#0D0D0F]">
+        <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
   }

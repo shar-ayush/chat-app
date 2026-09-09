@@ -1,7 +1,7 @@
 import { useSocketStore } from "@/lib/socket";
 import { useAuth } from "@clerk/expo";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNetworkSync } from "@/hooks/useNetworkSync";
 
 import { triggerSync } from "@/lib/syncEngine";
@@ -13,19 +13,24 @@ const SocketConnection = () => {
   const connect = useSocketStore((state) => state.connect);
   const disconnect = useSocketStore((state) => state.disconnect);
 
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
+
   useEffect(() => {
     if (isSignedIn) {
-      getToken()
+      getTokenRef.current()
         .then((token) => {
-          if (token) connect(token, queryClient);
+          if (token) connect(token, queryClient, () => getTokenRef.current());
         })
         .catch(() => {});
-    } else disconnect();
+    } else {
+      disconnect();
+    }
 
     return () => {
       disconnect();
     };
-  }, [isSignedIn, connect, disconnect, getToken, queryClient]);
+  }, [isSignedIn, connect, disconnect, queryClient]);
 
   // Failsafe aggressive background polling for stuck messages
   useEffect(() => {

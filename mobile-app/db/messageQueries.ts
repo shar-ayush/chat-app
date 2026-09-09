@@ -1,4 +1,4 @@
-import { getDb } from './database';
+import { runWithDb } from './database';
 
 export type MessageStatus = 'pending' | 'sending' | 'sent' | 'delivered' | 'failed';
 
@@ -28,55 +28,52 @@ export interface LocalMessage {
 }
 
 export const insertMessage = async (msg: LocalMessage) => {
-  const db = await getDb();
-  
   const safeCreatedAt = (typeof msg.created_at !== 'number' || Number.isNaN(msg.created_at)) ? Date.now() : msg.created_at;
 
-  await db.runAsync(
-    `INSERT INTO messages (
-       id, chat_id, sender_id, type,
-       cipher_text, nonce, sender_cipher_text, sender_nonce, sender_public_key,
-       file_url, file_name, mime_type, file_size, local_uri,
-       status, created_at, server_id, retry_count,
-       is_deleted, deleted_at, deleted_for
-     ) VALUES (
-       $id, $chat_id, $sender_id, $type,
-       $cipher_text, $nonce, $sender_cipher_text, $sender_nonce, $sender_public_key,
-       $file_url, $file_name, $mime_type, $file_size, $local_uri,
-       $status, $created_at, $server_id, $retry_count,
-       $is_deleted, $deleted_at, $deleted_for
-     ) ON CONFLICT(id) DO UPDATE SET
-       status = excluded.status,
-       server_id = excluded.server_id,
-       retry_count = excluded.retry_count,
-       local_uri = excluded.local_uri,
-       is_deleted = excluded.is_deleted,
-       deleted_at = excluded.deleted_at,
-       deleted_for = excluded.deleted_for`,
-    {
-      $id: msg.id || "temp-id-fallback",
-      $chat_id: msg.chat_id || "unknown_chat",
-      $sender_id: msg.sender_id || "unknown_sender",
-      $type: msg.type ?? 'text',
-      $cipher_text: msg.cipher_text ?? "",
-      $nonce: msg.nonce ?? "",
-      $sender_cipher_text: msg.sender_cipher_text ?? "",
-      $sender_nonce: msg.sender_nonce ?? "",
-      $sender_public_key: msg.sender_public_key ?? "",
-      $file_url: msg.file_url ?? null,
-      $file_name: msg.file_name ?? null,
-      $mime_type: msg.mime_type ?? null,
-      $file_size: msg.file_size ?? null,
-      $local_uri: msg.local_uri ?? null,
-      $status: msg.status || 'pending',
-      $created_at: safeCreatedAt,
-      $server_id: msg.server_id ?? "",
-      $retry_count: msg.retry_count ?? 0,
-      $is_deleted: msg.is_deleted ?? 0,
-      $deleted_at: msg.deleted_at ?? null,
-      $deleted_for: msg.deleted_for ?? null
-    }
-  );
+  const params: (string | number | null)[] = [
+    String(msg.id || "temp-id-fallback"),
+    String(msg.chat_id || "unknown_chat"),
+    String(msg.sender_id || "unknown_sender"),
+    String(msg.type ?? 'text'),
+    msg.cipher_text ? String(msg.cipher_text) : "",
+    msg.nonce ? String(msg.nonce) : "",
+    msg.sender_cipher_text ? String(msg.sender_cipher_text) : "",
+    msg.sender_nonce ? String(msg.sender_nonce) : "",
+    msg.sender_public_key ? String(msg.sender_public_key) : "",
+    msg.file_url ? String(msg.file_url) : null,
+    msg.file_name ? String(msg.file_name) : null,
+    msg.mime_type ? String(msg.mime_type) : null,
+    typeof msg.file_size === 'number' ? msg.file_size : null,
+    msg.local_uri ? String(msg.local_uri) : null,
+    String(msg.status || 'pending'),
+    safeCreatedAt,
+    msg.server_id ? String(msg.server_id) : "",
+    typeof msg.retry_count === 'number' ? msg.retry_count : 0,
+    msg.is_deleted ? 1 : 0,
+    typeof msg.deleted_at === 'number' ? msg.deleted_at : null,
+    msg.deleted_for ? String(msg.deleted_for) : null,
+  ];
+
+  await runWithDb(async (db) => {
+    await db.runAsync(
+      `INSERT INTO messages (
+         id, chat_id, sender_id, type,
+         cipher_text, nonce, sender_cipher_text, sender_nonce, sender_public_key,
+         file_url, file_name, mime_type, file_size, local_uri,
+         status, created_at, server_id, retry_count,
+         is_deleted, deleted_at, deleted_for
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         status = excluded.status,
+         server_id = excluded.server_id,
+         retry_count = excluded.retry_count,
+         local_uri = excluded.local_uri,
+         is_deleted = excluded.is_deleted,
+         deleted_at = excluded.deleted_at,
+         deleted_for = excluded.deleted_for;`,
+      params
+    );
+  });
 };
 
 export const updateMessageStatus = async (
@@ -85,42 +82,49 @@ export const updateMessageStatus = async (
   serverId?: string,
   incrementRetry?: boolean
 ) => {
-  const db = await getDb();
-  let query = "UPDATE messages SET status = $status";
-  const params: Record<string, any> = { $status: status, $id: id };
+  const safeId = String(id);
+  const safeStatus = String(status);
+  let query = "UPDATE messages SET status = ?";
+  const params: (string | number | null)[] = [safeStatus];
 
   if (serverId) {
-    query += ", server_id = $server_id";
-    params.$server_id = serverId;
+    query += ", server_id = ?";
+    params.push(String(serverId));
   }
 
   if (incrementRetry) {
     query += ", retry_count = retry_count + 1";
   }
 
-  query += " WHERE id = $id";
+  query += " WHERE id = ?;";
+  params.push(safeId);
 
-  await db.runAsync(query, params);
+  await runWithDb(async (db) => {
+    await db.runAsync(query, params);
+  });
 };
 
 export const getOldestPendingMessage = async (): Promise<LocalMessage | null> => {
-  const db = await getDb();
-  return await db.getFirstAsync<LocalMessage>(
-    "SELECT * FROM messages WHERE status IN ('pending', 'sending') ORDER BY created_at ASC LIMIT 1"
-  );
+  return runWithDb(async (db) => {
+    return await db.getFirstAsync<LocalMessage>(
+      "SELECT * FROM messages WHERE status IN ('pending', 'sending') ORDER BY created_at ASC LIMIT 1"
+    );
+  });
 };
 
 export const getMessagesByChatId = async (chatId: string): Promise<LocalMessage[]> => {
-  const db = await getDb();
-  return await db.getAllAsync<LocalMessage>(
-    "SELECT * FROM messages WHERE chat_id = $chatId ORDER BY created_at ASC",
-    { $chatId: chatId }
-  );
+  return runWithDb(async (db) => {
+    return await db.getAllAsync<LocalMessage>(
+      "SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC",
+      [String(chatId)]
+    );
+  });
 };
 
 export const resetSendingToPending = async () => {
-  const db = await getDb();
-  await db.runAsync("UPDATE messages SET status = 'pending' WHERE status = 'sending';");
+  await runWithDb(async (db) => {
+    await db.runAsync("UPDATE messages SET status = 'pending' WHERE status = 'sending';");
+  });
 };
 
 export const markMessageAsFailed = async (id: string) => {
@@ -128,12 +132,13 @@ export const markMessageAsFailed = async (id: string) => {
 };
 
 export const checkMessageExistsByServerId = async (serverId: string): Promise<boolean> => {
-  const db = await getDb();
-  const result = await db.getFirstAsync<{ count: number }>(
-    "SELECT count(*) as count FROM messages WHERE server_id = $serverId",
-    { $serverId: serverId }
-  );
-  return (result?.count || 0) > 0;
+  return runWithDb(async (db) => {
+    const result = await db.getFirstAsync<{ count: number }>(
+      "SELECT count(*) as count FROM messages WHERE server_id = ?",
+      [String(serverId)]
+    );
+    return (result?.count || 0) > 0;
+  });
 };
 
 // ── Pending Actions & Deletions ──────────────────────────────────────────────
@@ -146,62 +151,58 @@ export interface PendingAction {
 }
 
 export const insertPendingAction = async (action: PendingAction) => {
-  const db = await getDb();
-  await db.runAsync(
-    "INSERT INTO pending_actions (id, type, payload, created_at) VALUES ($id, $type, $payload, $created_at)",
-    {
-      $id: action.id,
-      $type: action.type,
-      $payload: action.payload,
-      $created_at: action.created_at
-    }
-  );
+  await runWithDb(async (db) => {
+    await db.runAsync(
+      "INSERT INTO pending_actions (id, type, payload, created_at) VALUES (?, ?, ?, ?)",
+      [String(action.id), String(action.type), String(action.payload), Number(action.created_at) || Date.now()]
+    );
+  });
 };
 
 export const getPendingActions = async (): Promise<PendingAction[]> => {
-  const db = await getDb();
-  return await db.getAllAsync<PendingAction>(
-    "SELECT * FROM pending_actions ORDER BY created_at ASC"
-  );
+  return runWithDb(async (db) => {
+    return await db.getAllAsync<PendingAction>(
+      "SELECT * FROM pending_actions ORDER BY created_at ASC"
+    );
+  });
 };
 
 export const deletePendingAction = async (id: string) => {
-  const db = await getDb();
-  await db.runAsync("DELETE FROM pending_actions WHERE id = $id", { $id: id });
+  await runWithDb(async (db) => {
+    await db.runAsync("DELETE FROM pending_actions WHERE id = ?", [String(id)]);
+  });
 };
 
 export const markMessagesDeletedForMeLocal = async (messageIds: string[], userId: string) => {
-  const db = await getDb();
-  // Since deleted_for is a stringified JSON array, if it's null we set it to single item array, else we parse and append in application logic or we can write a simple replace approach.
-  // SQLite doesn't easily JSON append, so we select, update, and save.
-  for (const id of messageIds) {
-    const msg = await db.getFirstAsync<{ deleted_for: string }>(
-      "SELECT deleted_for FROM messages WHERE id = $id OR server_id = $id", 
-      { $id: id }
-    );
-    if (msg) {
-      let arr: string[] = [];
-      try { arr = JSON.parse(msg.deleted_for || "[]"); } catch (e) {}
-      if (!arr.includes(userId)) {
-        arr.push(userId);
-        await db.runAsync(
-          "UPDATE messages SET deleted_for = $deleted_for WHERE id = $id OR server_id = $id", 
-          {
-            $deleted_for: JSON.stringify(arr),
-            $id: id
-          }
-        );
+  await runWithDb(async (db) => {
+    for (const id of messageIds) {
+      const msg = await db.getFirstAsync<{ deleted_for: string }>(
+        "SELECT deleted_for FROM messages WHERE id = ? OR server_id = ?", 
+        [String(id), String(id)]
+      );
+      if (msg) {
+        let arr: string[] = [];
+        try { arr = JSON.parse(msg.deleted_for || "[]"); } catch (e) {}
+        if (!arr.includes(userId)) {
+          arr.push(userId);
+          await db.runAsync(
+            "UPDATE messages SET deleted_for = ? WHERE id = ? OR server_id = ?", 
+            [JSON.stringify(arr), String(id), String(id)]
+          );
+        }
       }
     }
-  }
+  });
 };
 
 export const markMessagesDeletedForEveryoneLocal = async (messageIds: string[]) => {
-  const db = await getDb();
-  for (const id of messageIds) {
-    await db.runAsync(
-      "UPDATE messages SET is_deleted = 1, deleted_at = $deleted_at WHERE id = $id OR server_id = $id",
-      { $deleted_at: Date.now(), $id: id }
-    );
-  }
+  await runWithDb(async (db) => {
+    for (const id of messageIds) {
+      await db.runAsync(
+        "UPDATE messages SET is_deleted = 1, deleted_at = ? WHERE id = ? OR server_id = ?",
+        [Date.now(), String(id), String(id)]
+      );
+    }
+  });
 };
+

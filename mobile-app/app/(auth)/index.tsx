@@ -19,35 +19,35 @@ const AuthScreen = () => {
     <View className="flex-1 bg-surface-dark">
       <View className="absolute inset-0 overflow-hidden">
         <LinearGradient
-          colors={["#0D0D0F", "#1A1A2E", "#16213E", "#0D0D0F"]}
+          colors={["#0A0E1A", "#0D1B2A", "#1B2A4A", "#0A0E1A"]}
           style={{ position: "absolute", width: "100%", height: "100%" }}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         />
 
         <AnimatedOrb
-          colors={["#F4A261", "#E76F51"]}
+          colors={["#007AFF", "#0055B3"]}
           size={300}
           initialX={-80}
           initialY={height * 0.1}
           duration={4000}
         />
         <AnimatedOrb
-          colors={["#E76F51", "#F4A261"]}
+          colors={["#38BDF8", "#007AFF"]}
           size={250}
           initialX={width - 100}
           initialY={height * 0.3}
           duration={5000}
         />
         <AnimatedOrb
-          colors={["#FFD7BA", "#F4A261"]}
+          colors={["#60A5FA", "#2563EB"]}
           size={200}
           initialX={width * 0.3}
           initialY={height * 0.6}
           duration={3500}
         />
         <AnimatedOrb
-          colors={["#F4B183", "#E76F51"]}
+          colors={["#0055B3", "#1D4ED8"]}
           size={180}
           initialX={-50}
           initialY={height * 0.75}
@@ -61,40 +61,38 @@ const AuthScreen = () => {
         />
       </View>
 
-      <SafeAreaView className="flex-1">
+      <SafeAreaView className="flex-1 justify-between px-6 pb-6">
         {/* Top Section - Branding */}
-        <View className="items-center pt-10">
+        <View className="items-center pt-8">
           <Image
-            source={require("../../assets/images/logo.png")}
-            style={{ width: 100, height: 100, marginVertical: -20 }}
+            source={require("../../assets/images/icon.png")}
+            style={{ width: 110, height: 110 }}
             contentFit="contain"
           />
-          <Text className="text-4xl font-bold text-primary font-serif tracking-wider uppercase">
+          <Text
+            className="text-3xl font-bold text-primary font-serif tracking-wider uppercase mt-1 px-3 text-center"
+            style={{ paddingHorizontal: 12, includeFontPadding: false }}
+          >
             Whisper
           </Text>
         </View>
 
-        {/* CENTER SECTION - HERO IMG */}
-        <View className="flex-1 justify-center items-center px-6">
-          <Image
-            source={require("../../assets/images/auth.png")}
-            style={{
-              width: width - 48,
-              height: height * 0.3,
-            }}
-            contentFit="contain"
-          />
+        {/* Center Section - Headline & Description */}
+        <View className="items-center px-4">
+          <Text className="text-4xl font-extrabold text-foreground text-center tracking-tight">
+            Connect & Chat
+          </Text>
+          <Text className="text-3xl font-bold text-primary font-mono mt-1">
+            Seamlessly
+          </Text>
+          <Text className="text-slate-400 text-md text-center mt-3 max-w-[280px] leading-5">
+            Private, end-to-end encrypted messaging with friends.
+          </Text>
+        </View>
 
-          {/* Headline */}
-          <View className="mt-6 items-center">
-            <Text className="text-5xl font-bold text-foreground text-center font-sans">
-              Connect & Chat
-            </Text>
-            <Text className="text-3xl font-bold text-primary font-mono">Seamlessly</Text>
-          </View>
-
-          {/* AUTH BUTTONS */}
-          <View className="flex-row gap-4 mt-10">
+        {/* Bottom Section - Auth Buttons */}
+        <View className="w-full pb-4">
+          <View className="flex-row gap-4">
             {/* GOOGLE BTN */}
             <Pressable
               className="flex-1 flex-row items-center justify-center gap-2 bg-white/95 py-4 rounded-2xl active:scale-[0.97]"

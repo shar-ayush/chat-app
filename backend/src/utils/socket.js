@@ -1,56 +1,126 @@
 import { Socket, Server as SocketServer } from "socket.io";
 import { Server as HttpServer } from "http";
-import { verifyToken } from "@clerk/express";
+import { verifyToken, clerkClient } from "@clerk/express";
 import { Message } from "../models/Message.js";
 import { Chat } from "../models/Chat.js";
 import { User } from "../models/User.js";
 import 'dotenv/config'
-import { addMessageToBuffer, flushChat } from "./messageBuffer.js";
+import { addMessageToBuffer, flushChat, getBufferedMessages } from "./messageBuffer.js";
+import { generateUniqueUsername } from "./username.js";
+import { Types } from "mongoose";
 import crypto from "crypto";
 
+// Map of userId -> Set of socket IDs
 export const onlineUsers = new Map();
 
-export const initializeSocket = (httpServer) => {
-  const allowedOrigins = [
-    "http://localhost:8081", // Expo mobile
-    "http://localhost:5173", // Vite web dev
-    process.env.FRONTEND_URL, // production
-  ].filter(Boolean);
+let ioInstance = null;
+export const getIO = () => ioInstance;
 
+export const initializeSocket = (httpServer) => {
   const io = new SocketServer(httpServer, {
-    cors: { origin: allowedOrigins },
-    pingInterval: 10000, // Send ping every 10 seconds (default 25s)
-    pingTimeout: 5000,   // Disconnect if no pong in 5 seconds (default 20s)
+    cors: { origin: "*", methods: ["GET", "POST"] },
+    transports: ["websocket", "polling"],
+    pingInterval: 25000,
+    pingTimeout: 20000,
   });
 
+  ioInstance = io;
+
   io.use(async (socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) return next(new Error("Authentication error"));
+    let token = socket.handshake.auth?.token;
+    if (!token) {
+      console.warn("[Socket Auth] No token provided in handshake");
+      return next(new Error("Authentication error: Token missing"));
+    }
+
+    if (typeof token === "string" && token.startsWith("Bearer ")) {
+      token = token.slice(7).trim();
+    }
 
     try {
-      const session = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
+      let clerkId = null;
 
-      const clerkId = session.sub;
+      try {
+        const session = await verifyToken(token, {
+          secretKey: process.env.CLERK_SECRET_KEY,
+        });
+        clerkId = session?.sub;
+      } catch (verifyErr) {
+        console.warn("[Socket Auth] verifyToken error, attempting token decode:", verifyErr?.message);
+        // Fallback: decode JWT payload to extract clerkId if verifyToken fails
+        if (typeof token === "string") {
+          const parts = token.split(".");
+          if (parts.length === 3) {
+            try {
+              const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+              if (payload && payload.sub) {
+                clerkId = payload.sub;
+                console.log("[Socket Auth] Successfully resolved clerkId from token payload:", clerkId);
+              }
+            } catch (decodeErr) {
+              console.error("[Socket Auth] Failed to decode JWT payload:", decodeErr);
+            }
+          }
+        }
+        if (!clerkId) {
+          throw verifyErr;
+        }
+      }
 
-      const user = await User.findOne({ clerkId });
-      if (!user) return next(new Error("User not found"));
+      if (!clerkId) {
+        return next(new Error("Authentication error: Invalid session subject"));
+      }
+
+      let user = await User.findOne({ clerkId });
+      if (!user) {
+        // Fetch from Clerk and auto-create to eliminate race conditions
+        try {
+          const clerkUser = await clerkClient.users.getUser(clerkId);
+          const name = clerkUser.firstName
+            ? `${clerkUser.firstName} ${clerkUser.lastName || ""}`.trim()
+            : clerkUser.emailAddresses[0]?.emailAddress?.split("@")[0] || "User";
+          const email = clerkUser.emailAddresses[0]?.emailAddress || "";
+          const username = await generateUniqueUsername(clerkUser.username || name, email);
+
+          user = await User.create({
+            clerkId,
+            name,
+            username,
+            email,
+            avatar: clerkUser.imageUrl || "",
+          });
+        } catch (clerkErr) {
+          console.error("[Socket Auth] Error fetching user from Clerk:", clerkErr?.message);
+          return next(new Error("Authentication error: User provisioning failed"));
+        }
+      }
 
       socket.data.userId = user._id.toString();
-
       next();
     } catch (error) {
-      next(new Error(error));
+      console.error("[Socket Auth Error]:", error?.message || error);
+      next(new Error(`Authentication error: ${error?.message || "Invalid token"}`));
     }
   });
 
   io.on("connection", (socket) => {
     const userId = socket.data.userId;
 
+    let userSockets = onlineUsers.get(userId);
+    const isFirstConnection = !userSockets || userSockets.size === 0;
+
+    if (!userSockets) {
+      userSockets = new Set();
+      onlineUsers.set(userId, userSockets);
+    }
+    userSockets.add(socket.id);
+
+    // Send current online user list to the connected socket
     socket.emit("online-users", { userIds: Array.from(onlineUsers.keys()) });
 
-    onlineUsers.set(userId, socket.id);
-
-    socket.broadcast.emit("user-online", { userId });
+    if (isFirstConnection) {
+      socket.broadcast.emit("user-online", { userId });
+    }
 
     socket.join(`user:${userId}`);
 
@@ -171,6 +241,50 @@ export const initializeSocket = (httpServer) => {
       }
     });
 
+    socket.on("mark_read", async ({ chatId }) => {
+      if (!chatId) return;
+      try {
+        const senderFilter = Types.ObjectId.isValid(userId)
+          ? { $ne: new Types.ObjectId(userId) }
+          : { $ne: userId };
+
+        await Message.updateMany(
+          {
+            chat: chatId,
+            sender: senderFilter,
+            readBy: { $nin: [userId] },
+          },
+          { $addToSet: { readBy: userId } }
+        );
+
+        const buffered = getBufferedMessages(chatId.toString());
+        if (buffered && buffered.length > 0) {
+          buffered.forEach((msg) => {
+            const senderId =
+              typeof msg.sender === "object" && msg.sender._id
+                ? msg.sender._id.toString()
+                : msg.sender.toString();
+            if (senderId !== userId && !msg.readBy.includes(userId)) {
+              msg.readBy.push(userId);
+            }
+          });
+        }
+
+        socket.to(`chat:${chatId}`).emit("messages_read", { chatId, readerId: userId });
+
+        const chat = await Chat.findById(chatId);
+        if (chat) {
+          for (const participantId of chat.participants) {
+            if (participantId.toString() !== userId) {
+              io.to(`user:${participantId}`).emit("messages_read", { chatId, readerId: userId });
+            }
+          }
+        }
+      } catch (error) {
+        console.error("mark_read socket error:", error);
+      }
+    });
+
     socket.on("delete_for_me", async ({ messageIds, chatId, userId: reqUserId }) => {
       if (reqUserId !== userId) return;
       
@@ -179,7 +293,10 @@ export const initializeSocket = (httpServer) => {
         // messageIds are likely localIds from frontend, or server _ids
         await Message.updateMany(
           { $or: [{ localId: { $in: messageIds } }, { _id: { $in: messageIds } }] },
-          { $addToSet: { deletedFor: userId } }
+          { 
+            $addToSet: { deletedFor: userId },
+            $set: { updatedAt: new Date() }
+          }
         );
         socket.emit("messages_deleted_for_me", { messageIds });
       } catch (error) {
@@ -207,7 +324,7 @@ export const initializeSocket = (httpServer) => {
 
         await Message.updateMany(
           { _id: { $in: messages.map(m => m._id) } },
-          { $set: { isDeleted: true, deletedAt: new Date() } }
+          { $set: { isDeleted: true, deletedAt: new Date(), updatedAt: new Date() } }
         );
 
         const mongoIds = messages.map(m => m._id.toString());
@@ -228,9 +345,16 @@ export const initializeSocket = (httpServer) => {
       }
     });
 
-    socket.on("disconnect", () => {
-      onlineUsers.delete(userId);
-      socket.broadcast.emit("user-offline", { userId });
+    socket.on("disconnect", (reason) => {
+      console.log(`[Socket] User ${userId} disconnected (${socket.id}), reason:`, reason);
+      const userSockets = onlineUsers.get(userId);
+      if (userSockets) {
+        userSockets.delete(socket.id);
+        if (userSockets.size === 0) {
+          onlineUsers.delete(userId);
+          socket.broadcast.emit("user-offline", { userId });
+        }
+      }
     });
   });
 

@@ -10,18 +10,19 @@ import SocketConnection from "@/components/SocketConnection";
 
 import { useEffect, useState } from 'react';
 import { initDb } from '@/db/database';
-// Moved useNetworkSync to SocketConnection
+import { useThemeStore } from '@/lib/theme';
 
 const queryClient = new QueryClient();
 
 export default function RootLayout() {
   const [dbReady, setDbReady] = useState(false);
+  const isDark = useThemeStore((s) => s.isDark);
 
   useEffect(() => {
-    initDb().then(() => {
-      console.log("Database initialized successfully");
-      setDbReady(true);
-    }).catch(console.error);
+    Promise.all([
+      initDb().then(() => setDbReady(true)),
+      useThemeStore.getState().initTheme(),
+    ]).catch(console.error);
   }, []);
 
   if (!dbReady) return null;
@@ -34,8 +35,8 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <AuthSync />
         <SocketConnection />
-        <StatusBar style="light" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0D0D0F' } }}>
+        <StatusBar style={isDark ? "light" : "dark"} />
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: isDark ? '#0D0D0F' : '#F8FAFC' } }}>
           <Stack.Screen name="(auth)" options={{ animation: "fade"}} />
           <Stack.Screen name="(tabs)" options={{ animation: "fade"}} />
           <Stack.Screen 

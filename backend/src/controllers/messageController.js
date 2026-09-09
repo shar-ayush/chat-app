@@ -18,15 +18,21 @@ export async function syncMessages(req, res, next) {
       chat: { $in: chatIds },
     };
 
+    let afterDate = new Date(0);
     const timestamp = Number(after);
-    if (!isNaN(timestamp)) {
-      matchQuery.createdAt = { $gt: new Date(timestamp) };
+    if (!isNaN(timestamp) && timestamp > 0) {
+      afterDate = new Date(timestamp);
     } else {
-      const date = new Date(after);
-      if (!isNaN(date.valueOf())) {
-        matchQuery.createdAt = { $gt: date };
+      const parsedDate = new Date(after);
+      if (!isNaN(parsedDate.valueOf())) {
+        afterDate = parsedDate;
       }
     }
+
+    matchQuery.$or = [
+      { updatedAt: { $gt: afterDate } },
+      { createdAt: { $gt: afterDate } },
+    ];
 
     const messages = await Message.find(matchQuery)
       .populate("sender", "name email avatar")
@@ -39,7 +45,7 @@ export async function syncMessages(req, res, next) {
       for (const msg of buffered) {
         // Only include if it meets the 'after' criteria
         const msgDate = new Date(msg.createdAt);
-        if (!matchQuery.createdAt || msgDate > matchQuery.createdAt.$gt) {
+        if (msgDate > afterDate) {
           messages.push(msg);
           hasBuffered = true;
         }
@@ -72,11 +78,13 @@ export async function getMessages(req, res, next) {
       return;
     }
 
-    const messages = await Message.find({ chat: chatId })
+    const messages = await Message.find({ chat: chatId, deletedFor: { $ne: userId } })
       .populate("sender", "name email avatar")
       .sort({ createdAt: 1 }); 
 
-    const buffered = getBufferedMessages(chatId.toString());
+    const buffered = getBufferedMessages(chatId.toString()).filter(
+      (msg) => !msg.deletedFor || !msg.deletedFor.includes(userId)
+    );
     if (buffered.length > 0) {
       messages.push(...buffered);
     }

@@ -5,12 +5,16 @@ import { Chat, MessageSender, User } from "@/types";
 import { encryptMessage, decryptMessage } from "@/crypto/messageCrypto";
 import * as Crypto from 'expo-crypto';
 import { insertMessage, markMessagesDeletedForEveryoneLocal, insertPendingAction } from "../db/messageQueries";
+import { updateLocalChatLastMessage, markLocalChatAsRead } from "../db/chatQueries";
 import { triggerSync, setSocketProvider } from "./syncEngine";
 import { getDb } from "../db/database";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const SOCKET_URL = "https://chat-app-muyj.onrender.com";
-// export const SOCKET_URL = "http://172.16.219.240:3000";
+export const SOCKET_URL =
+  process.env.EXPO_PUBLIC_SOCKET_URL ||
+  (process.env.EXPO_PUBLIC_API_URL
+    ? process.env.EXPO_PUBLIC_API_URL.replace(/\/api\/?$/, "")
+    : "http://172.16.40.135:3000");
 
 interface SocketState {
   socket: Socket | null;
@@ -21,7 +25,7 @@ interface SocketState {
   currentChatId: string | null;
   queryClient: QueryClient | null;
 
-  connect: (token: string, queryClient: QueryClient) => void;
+  connect: (token: string, queryClient: QueryClient, getToken?: () => Promise<string | null>) => void;
   disconnect: () => void;
   joinChat: (chatId: string) => void;
   leaveChat: (chatId: string) => void;
@@ -40,13 +44,32 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   currentChatId: null,
   queryClient: null,
 
-  connect: (token, queryClient) => {
+  connect: (token, queryClient, getToken) => {
     const existingSocket = get().socket;
     if (existingSocket?.connected) return;
 
     if (existingSocket) existingSocket.disconnect();
 
-    const socket = io(SOCKET_URL, { auth: { token } });
+    const socket = io(SOCKET_URL, {
+      auth: async (cb) => {
+        try {
+          if (getToken) {
+            const freshToken = await getToken();
+            if (freshToken) return cb({ token: freshToken });
+          }
+        } catch {}
+        cb({ token });
+      },
+      transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+    });
+
+    socket.on("connect_error", (err) => {
+      console.warn("Socket connect error:", err.message);
+    });
 
     socket.on("connect", async () => {
       console.log("Socket connected, id:", socket.id);
@@ -56,9 +79,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       try {
         // Pull Sync Missed Messages
         const after = await AsyncStorage.getItem('lastSyncTimestamp') || "0";
+        const currentToken = getToken ? (await getToken().catch(() => token)) || token : token;
 
         const response = await fetch(`${SOCKET_URL}/api/messages/sync?after=${after}`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${currentToken}` },
         });
 
         if (response.ok) {
@@ -68,7 +92,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           for (const msg of missedMessages) {
             const senderId = typeof msg.sender === 'object' ? msg.sender._id : msg.sender;
             await insertMessage({
-              id: msg.localId || Crypto.randomUUID(),
+              id: msg.localId || msg._id || Crypto.randomUUID(),
               chat_id: msg.chat,
               sender_id: senderId,
               type: msg.type ?? 'text',
@@ -106,8 +130,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       }
     });
 
-    socket.on("disconnect", () => {
-      console.log("Socket disconnect", socket.id);
+    socket.on("messages_read", ({ chatId }: { chatId: string }) => {
+      set((state) => {
+        const unreadChats = new Set(state.unreadChats);
+        unreadChats.delete(chatId);
+        return { unreadChats };
+      });
+      markLocalChatAsRead(chatId).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ["chats"] });
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("Socket disconnect, reason:", reason);
       set({ isConnected: false });
     });
 
@@ -228,6 +262,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         typingUsers.delete(message.chat);
         return { typingUsers: typingUsers };
       });
+
+      // Update local SQLite chat preview
+      updateLocalChatLastMessage(
+        message.chat,
+        {
+          id: message._id || message.localId || Crypto.randomUUID(),
+          text: plaintext,
+          sender: senderId,
+          createdAt: message.createdAt || new Date().toISOString(),
+        },
+        currentChatId !== message.chat
+      ).catch(() => {});
     });
 
     // Handle new-message from sender's perspective (when sender makes request from another device, etc)
@@ -259,6 +305,17 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           if (!oldChats) return oldChats;
           return oldChats.map(c => {
             if (c.lastMessage && (messageIds.includes(c.lastMessage._id) || messageIds.includes((c.lastMessage as any).id))) {
+              updateLocalChatLastMessage(
+                c._id,
+                {
+                  id: c.lastMessage._id,
+                  text: "🚫 This message was deleted",
+                  sender: c.lastMessage.sender,
+                  createdAt: c.lastMessage.createdAt,
+                },
+                false
+              ).catch(() => {});
+
               return {
                 ...c,
                 lastMessage: { ...c.lastMessage, isDeleted: true, text: "" }
@@ -276,6 +333,19 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       if (messageIds && messageIds.length > 0) {
         queryClient.invalidateQueries({ queryKey: ["chats"] });
       }
+    });
+
+    socket.on("friend_request_received", (data: any) => {
+      console.log("Friend request received via socket:", data);
+      queryClient.invalidateQueries({ queryKey: ["friendRequests"] });
+      queryClient.invalidateQueries({ queryKey: ["friends"] });
+    });
+
+    socket.on("friend_request_accepted", (data: any) => {
+      console.log("Friend request accepted via socket:", data);
+      queryClient.invalidateQueries({ queryKey: ["friendRequests"] });
+      queryClient.invalidateQueries({ queryKey: ["friends"] });
+      queryClient.invalidateQueries({ queryKey: ["chats"] });
     });
 
     set({ socket, queryClient });
@@ -297,20 +367,25 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
   },
   joinChat: (chatId) => {
-    const socket = get().socket;
-    set((state) => {
-      const unreadChats = new Set(state.unreadChats);
-      unreadChats.delete(chatId);
-      return { currentChatId: chatId, unreadChats: unreadChats };
-    });
+    const { socket, currentChatId } = get();
+    if (currentChatId !== chatId) {
+      set((state) => {
+        const unreadChats = new Set(state.unreadChats);
+        unreadChats.delete(chatId);
+        return { currentChatId: chatId, unreadChats: unreadChats };
+      });
+      markLocalChatAsRead(chatId).catch(() => {});
+    }
 
     if (socket?.connected) {
       socket.emit("join-chat", chatId);
     }
   },
   leaveChat: (chatId) => {
-    const { socket } = get();
-    set({ currentChatId: null });
+    const { socket, currentChatId } = get();
+    if (currentChatId !== null) {
+      set({ currentChatId: null });
+    }
     if (socket?.connected) {
       socket.emit("leave-chat", chatId);
     }
@@ -366,6 +441,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           return chat;
         });
       });
+
+      // Update local SQLite chat preview
+      updateLocalChatLastMessage(
+        chatId,
+        {
+          id: localId,
+          text: `📎 ${filePayload.fileName || "File"}`,
+          sender: currentUser._id,
+          createdAt: new Date().toISOString(),
+        },
+        false
+      ).catch(() => {});
 
       // Emit via socket (backend stores only metadata, no re-upload)
       if (socket?.connected) {
@@ -430,6 +517,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           return chat;
         });
       });
+
+      // Update local SQLite chat preview
+      updateLocalChatLastMessage(
+        chatId,
+        {
+          id: localId,
+          text: text,
+          sender: currentUser._id,
+          createdAt: new Date().toISOString(),
+        },
+        false
+      ).catch(() => {});
 
       // Trigger sync engine to push to backend
       triggerSync();

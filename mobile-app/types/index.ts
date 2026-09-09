@@ -1,6 +1,7 @@
 export interface User {
   _id: string;
   name: string;
+  username?: string;
   email: string;
   avatar: string;
   publicKey?: string;
@@ -9,8 +10,50 @@ export interface User {
 export interface MessageSender {
   _id: string;
   name: string;
+  username?: string;
   email: string;
   avatar: string;
+}
+
+export type FriendshipStatus = "none" | "pending_sent" | "pending_received" | "friends";
+
+export interface SearchUserResult {
+  _id: string;
+  name: string;
+  username?: string;
+  avatar: string;
+  status: FriendshipStatus;
+  requestId?: string | null;
+}
+
+export interface FriendUser {
+  _id: string;
+  name: string;
+  username?: string;
+  avatar: string;
+  email: string;
+  publicKey?: string;
+  friendshipId: string;
+  since: string;
+}
+
+export interface FriendRequest {
+  _id: string;
+  sender: {
+    _id: string;
+    name: string;
+    username?: string;
+    avatar: string;
+  };
+  recipient: {
+    _id: string;
+    name: string;
+    username?: string;
+    avatar: string;
+  };
+  status: "pending" | "accepted" | "rejected";
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Message {

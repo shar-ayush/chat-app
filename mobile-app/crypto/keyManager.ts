@@ -4,7 +4,8 @@ import { encodeBase64, decodeBase64 } from 'tweetnacl-util';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../lib/axios';
 
-const KEY_STORAGE = 'e2e_keypair';
+const KEY_STORAGE_PREFIX = 'e2e_keypair_';
+const LEGACY_KEY_STORAGE = 'e2e_keypair';
 
 // Patch nacl's PRNG with expo-crypto as a guaranteed fallback
 function patchNaclRandom() {
@@ -15,25 +16,43 @@ function patchNaclRandom() {
     }
   });
 }
+
 export async function initializeKeyPair(userId: string, authToken: string) {
   try {
-    // console.log('Starting E2E key initialization for user:', userId);
-    
-    // Patch PRNG before any nacl operation
     patchNaclRandom();
 
-    const stored = await AsyncStorage.getItem(KEY_STORAGE);
+    const userStorageKey = `${KEY_STORAGE_PREFIX}${userId}`;
+    let stored = await AsyncStorage.getItem(userStorageKey);
 
+    if (!stored) {
+      // Check legacy single-user storage
+      stored = await AsyncStorage.getItem(LEGACY_KEY_STORAGE);
+      if (stored) {
+        await AsyncStorage.setItem(userStorageKey, stored);
+      }
+    }
+
+    // 1. If we have keys locally, ensure backend has the backup
     if (stored) {
-      // console.log('Found existing keypair in storage, uploading public key...');
       const parsed = JSON.parse(stored);
-      await uploadPublicKey(userId, parsed.publicKey, authToken).catch(e => {
-        // console.warn('Offline or failed to upload existing public key, ignoring...', e);
-      });
+      await syncKeyPairToBackend(parsed.publicKey, parsed.secretKey, authToken).catch(() => {});
       return parsed;
     }
 
-    // console.log('Generating new keypair...');
+    // 2. If no local keys (e.g. app reinstalled or new device), try to restore from backend!
+    try {
+      const remote = await fetchKeyPairFromBackend(authToken);
+      if (remote?.publicKey && remote?.secretKey) {
+        console.log('[keyManager] Restored keypair from backend backup for user:', userId);
+        await AsyncStorage.setItem(userStorageKey, JSON.stringify(remote));
+        await AsyncStorage.setItem(LEGACY_KEY_STORAGE, JSON.stringify(remote));
+        return remote;
+      }
+    } catch (fetchErr) {
+      // No existing backup on backend, will generate new keys below
+    }
+
+    // 3. First time setup: generate new keypair and backup to backend
     const keyPair = nacl.box.keyPair();
 
     const keypairData = {
@@ -41,36 +60,49 @@ export async function initializeKeyPair(userId: string, authToken: string) {
       secretKey: encodeBase64(keyPair.secretKey),
     };
 
-    await AsyncStorage.setItem(KEY_STORAGE, JSON.stringify(keypairData));
-    // console.log('Keypair saved to storage, uploading public key to server...');
-    await uploadPublicKey(userId, keypairData.publicKey, authToken).catch(e => {
-        // console.warn('Network error: Public key upload failed, will need to upload later.', e);
-    });
+    await AsyncStorage.setItem(userStorageKey, JSON.stringify(keypairData));
+    await AsyncStorage.setItem(LEGACY_KEY_STORAGE, JSON.stringify(keypairData));
+    await syncKeyPairToBackend(keypairData.publicKey, keypairData.secretKey, authToken).catch(() => {});
 
     return keypairData;
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    // console.error('E2E key init failed:', errorMsg);
     throw err;
   }
 }
 
-async function uploadPublicKey(userId: string, publicKey: string, authToken: string) {
+async function syncKeyPairToBackend(publicKey: string, secretKey: string, authToken: string) {
   try {
-    const response = await api.post('/users/public-key',
-      { publicKey },
+    const response = await api.post('/users/key-pair',
+      { publicKey, secretKey },
       { headers: { Authorization: `Bearer ${authToken}` } }
     );
-    // console.log('Public key uploaded successfully:', response.data);
     return response.data;
   } catch (err) {
-    // console.error('Failed to upload public key:', err);
-    throw new Error(`Public key upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    // Fallback to public-key only if key-pair route is unreachable
+    return api.post('/users/public-key',
+      { publicKey, secretKey },
+      { headers: { Authorization: `Bearer ${authToken}` } }
+    ).catch(() => {});
   }
 }
 
-export async function getKeyPair() {
-  const stored = await AsyncStorage.getItem(KEY_STORAGE);
+async function fetchKeyPairFromBackend(authToken: string) {
+  try {
+    const response = await api.get('/users/key-pair', {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    return response.data;
+  } catch (err) {
+    return null;
+  }
+}
+
+export async function getKeyPair(userId?: string) {
+  if (userId) {
+    const userStored = await AsyncStorage.getItem(`${KEY_STORAGE_PREFIX}${userId}`);
+    if (userStored) return JSON.parse(userStored);
+  }
+  const stored = await AsyncStorage.getItem(LEGACY_KEY_STORAGE);
   if (!stored) throw new Error('No keypair found. Call initializeKeyPair first.');
   return JSON.parse(stored);
 }

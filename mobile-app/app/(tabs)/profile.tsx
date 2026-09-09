@@ -9,29 +9,24 @@ import { getDb } from "@/db/database";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useState } from "react";
 
-const MENU_SECTIONS = [
+interface MenuItem {
+  id: string;
+  icon: string;
+  label: string;
+  color: string;
+  value?: string;
+}
+
+interface MenuSection {
+  title: string;
+  items: MenuItem[];
+}
+
+const MENU_SECTIONS: MenuSection[] = [
   {
     title: "Account",
     items: [
       { id: "username", icon: "at-outline", label: "Edit Username", color: "#F4A261" },
-      { id: "privacy", icon: "shield-checkmark-outline", label: "Privacy & Security", color: "#10B981" },
-      { id: "notifications", icon: "notifications-outline", label: "Notifications", value: "On", color: "#8B5CF6" },
-    ],
-  },
-  {
-    title: "Preferences",
-    items: [
-      { id: "dark_mode", icon: "moon-outline", label: "Dark Mode", value: "On", color: "#6366F1" },
-      { id: "language", icon: "language-outline", label: "Language", value: "English", color: "#EC4899" },
-      { id: "storage", icon: "cloud-outline", label: "Data & Storage", value: "1.2 GB", color: "#14B8A6" },
-    ],
-  },
-  {
-    title: "Support",
-    items: [
-      { id: "help", icon: "help-circle-outline", label: "Help Center", color: "#F59E0B" },
-      { id: "contact", icon: "chatbubble-outline", label: "Contact Us", color: "#3B82F6" },
-      { id: "rate", icon: "star-outline", label: "Rate the App", color: "#F4A261" },
     ],
   },
 ];

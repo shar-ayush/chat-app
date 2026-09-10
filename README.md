@@ -19,7 +19,6 @@
   <img src="https://img.shields.io/badge/Database-SQLite_WAL-003B57?style=flat&logo=sqlite" alt="SQLite WAL" />
 </p>
 
-> 📚 **Deep Dive Guide**: Looking for an in-depth code-level walkthrough, system design breakdown, and top 30 technical interview Q&A? Check out [PROJECT_ARCHITECTURE_AND_INTERVIEW_PREP.md](./PROJECT_ARCHITECTURE_AND_INTERVIEW_PREP.md).
 
 ---
 

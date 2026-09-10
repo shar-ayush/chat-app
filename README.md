@@ -19,6 +19,8 @@
   <img src="https://img.shields.io/badge/Database-SQLite_WAL-003B57?style=flat&logo=sqlite" alt="SQLite WAL" />
 </p>
 
+> 📚 **Deep Dive Guide**: Looking for an in-depth code-level walkthrough, system design breakdown, and top 30 technical interview Q&A? Check out [PROJECT_ARCHITECTURE_AND_INTERVIEW_PREP.md](./PROJECT_ARCHITECTURE_AND_INTERVIEW_PREP.md).
+
 ---
 
 ## 📖 Table of Contents
@@ -78,13 +80,13 @@ flowchart TD
     SQLite -->|3. Optimistic render| UI
     SQLite -->|4. Pick oldest pending| SyncQueue
     NetDetector -.->|Network status| SyncQueue
-    SyncQueue -->|5. emit('send-message')| SocketServer
+    SyncQueue -->|5. Send message event| SocketServer
 
     %% Backend processing
     SocketServer -->|6. Auth handshake| Clerk
     SocketServer -->|7. Append message| RAMBuffer
     RAMBuffer -->|8. Batch insert / Flush| MongoDB
-    SocketServer -->|9. emit('message_ack')| SyncQueue
+    SocketServer -->|9. Message acknowledgement| SyncQueue
     SyncQueue -->|10. Update status to 'sent'| SQLite
 
     %% Incoming flow & Delivery

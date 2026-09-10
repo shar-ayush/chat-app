@@ -3,16 +3,38 @@ import { Stack } from "expo-router";
 import "../global.css";
 import { ClerkProvider } from '@clerk/expo'
 import { tokenCache } from '@clerk/expo/token-cache'
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { resourceCache } from '@clerk/expo/resource-cache'
+import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
+import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthSync from "@/components/AuthSync";
 import { StatusBar } from "expo-status-bar";
 import SocketConnection from "@/components/SocketConnection";
 
 import { useEffect, useState } from 'react';
 import { initDb } from '@/db/database';
+import { getLocalChats } from '@/db/chatQueries';
+import { getLocalFriends } from '@/db/friendQueries';
 import { useThemeStore } from '@/lib/theme';
 
-const queryClient = new QueryClient();
+// Connect TanStack Query to NetInfo for accurate online/offline detection
+onlineManager.setEventListener((setOnline) => {
+  return NetInfo.addEventListener((state) => {
+    setOnline(!!state.isConnected);
+  });
+});
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      networkMode: 'offlineFirst',
+      retry: 1,
+    },
+    mutations: {
+      networkMode: 'offlineFirst',
+    },
+  },
+});
 
 export default function RootLayout() {
   const [dbReady, setDbReady] = useState(false);
@@ -20,7 +42,36 @@ export default function RootLayout() {
 
   useEffect(() => {
     Promise.all([
-      initDb().then(() => setDbReady(true)),
+      initDb().then(async () => {
+        try {
+          const [cachedUserStr, localChats, localFriends] = await Promise.all([
+            AsyncStorage.getItem("cached_current_user").catch(() => null),
+            getLocalChats().catch(() => []),
+            getLocalFriends().catch(() => []),
+          ]);
+
+          if (cachedUserStr) {
+            try {
+              const cachedUser = JSON.parse(cachedUserStr);
+              if (cachedUser) {
+                queryClient.setQueryData(["currentUser"], cachedUser);
+              }
+            } catch {}
+          }
+
+          if (localChats && localChats.length > 0) {
+            queryClient.setQueryData(["chats"], localChats);
+          }
+
+          if (localFriends && localFriends.length > 0) {
+            queryClient.setQueryData(["friends"], localFriends);
+          }
+        } catch (err) {
+          console.warn("Failed to pre-populate local cache:", err);
+        } finally {
+          setDbReady(true);
+        }
+      }),
       useThemeStore.getState().initTheme(),
     ]).catch(console.error);
   }, []);
@@ -31,6 +82,7 @@ export default function RootLayout() {
     <ClerkProvider 
       tokenCache={tokenCache} 
       publishableKey={process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!}
+      __experimental_resourceCache={resourceCache}
     >
       <QueryClientProvider client={queryClient}>
         <AuthSync />

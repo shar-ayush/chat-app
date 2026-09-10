@@ -1,6 +1,8 @@
 import { useApi } from "@/lib/axios";
 import { FriendUser, FriendRequest, SearchUserResult, User } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getLocalFriends, upsertLocalFriends } from "@/db/friendQueries";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const useFriends = () => {
   const { apiWithAuth } = useApi();
@@ -8,12 +10,21 @@ export const useFriends = () => {
   return useQuery({
     queryKey: ["friends"],
     queryFn: async (): Promise<FriendUser[]> => {
-      const { data } = await apiWithAuth<FriendUser[]>({
-        method: "GET",
-        url: "/friends",
-      });
-      return data;
+      try {
+        const { data } = await apiWithAuth<FriendUser[]>({
+          method: "GET",
+          url: "/friends",
+          timeout: 7000,
+        });
+        await upsertLocalFriends(data).catch(() => {});
+        return data;
+      } catch (err) {
+        console.log("Offline mode: loading friends from local SQLite...");
+        const localFriends = await getLocalFriends();
+        return localFriends || [];
+      }
     },
+    staleTime: 30000,
   });
 };
 
@@ -23,12 +34,25 @@ export const useFriendRequests = () => {
   return useQuery({
     queryKey: ["friendRequests"],
     queryFn: async (): Promise<{ incoming: FriendRequest[]; outgoing: FriendRequest[] }> => {
-      const { data } = await apiWithAuth<{ incoming: FriendRequest[]; outgoing: FriendRequest[] }>({
-        method: "GET",
-        url: "/friends/requests",
-      });
-      return data;
+      try {
+        const { data } = await apiWithAuth<{ incoming: FriendRequest[]; outgoing: FriendRequest[] }>({
+          method: "GET",
+          url: "/friends/requests",
+          timeout: 7000,
+        });
+        await AsyncStorage.setItem("cached_friend_requests", JSON.stringify(data)).catch(() => {});
+        return data;
+      } catch (err) {
+        const cached = await AsyncStorage.getItem("cached_friend_requests");
+        if (cached) {
+          try {
+            return JSON.parse(cached);
+          } catch {}
+        }
+        return { incoming: [], outgoing: [] };
+      }
     },
+    staleTime: 30000,
   });
 };
 

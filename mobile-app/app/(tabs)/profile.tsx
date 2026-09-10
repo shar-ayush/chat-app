@@ -8,6 +8,7 @@ import { useSocketStore } from "@/lib/socket";
 import { useThemeStore } from "@/lib/theme";
 import { getDb } from "@/db/database";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 interface MenuItem {
@@ -34,6 +35,7 @@ const MENU_SECTIONS: MenuSection[] = [
 
 const ProfileTab = () => {
   const { signOut } = useAuth();
+  const queryClient = useQueryClient();
   const { user: clerkUser } = useUser();
   const { data: dbUser, isLoading: isLoadingUser } = useCurrentUser();
   const { mutate: updateUsername, isPending: isUpdatingUsername } = useUpdateUsername();
@@ -252,7 +254,11 @@ const ProfileTab = () => {
         {/* Logout Button */}
         <Pressable
           className="mx-5 mt-8 bg-white dark:bg-surface-card rounded-2xl py-4 items-center active:opacity-70 border border-slate-200 dark:border-surface-light"
-          onPress={() => signOut()}
+          onPress={async () => {
+            await AsyncStorage.removeItem("cached_current_user").catch(() => {});
+            queryClient.clear();
+            signOut();
+          }}
         >
           <View className="flex-row items-center">
             <Ionicons name="log-out-outline" size={20} color="#007AFF" />

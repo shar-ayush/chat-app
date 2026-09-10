@@ -53,53 +53,6 @@
 
 ---
 
-## 🏗 Architecture & Data Flow
-
-```mermaid
-flowchart TD
-    subgraph Client ["Client Device (React Native / Expo)"]
-        UI["User Interface (Chat Screen)"]
-        Crypto["TweetNaCl Engine (X25519 + XSalsa20)"]
-        SQLite[("Local SQLite (chat.db - WAL Mode)")]
-        SyncQueue["Sequential Sync Engine (FIFO)"]
-        NetDetector["NetInfo Network Detector"]
-        FileCache["Local File Cache (expo-file-system)"]
-    end
-
-    subgraph Backend ["Server & Cloud Infrastructure"]
-        SocketServer["Socket.IO Gateway (Clerk JWT Auth)"]
-        RAMBuffer["In-Memory Write Buffer (Map + Timers)"]
-        MongoDB[("MongoDB Replica Set")]
-        Cloudinary["Cloudinary CDN / Storage"]
-        Clerk["Clerk Authentication Service"]
-    end
-
-    %% Outgoing flow
-    UI -->|1. Raw text| Crypto
-    Crypto -->|2. Dual Ciphertexts + Nonce| SQLite
-    SQLite -->|3. Optimistic render| UI
-    SQLite -->|4. Pick oldest pending| SyncQueue
-    NetDetector -.->|Network status| SyncQueue
-    SyncQueue -->|5. Send message event| SocketServer
-
-    %% Backend processing
-    SocketServer -->|6. Auth handshake| Clerk
-    SocketServer -->|7. Append message| RAMBuffer
-    RAMBuffer -->|8. Batch insert / Flush| MongoDB
-    SocketServer -->|9. Message acknowledgement| SyncQueue
-    SyncQueue -->|10. Update status to 'sent'| SQLite
-
-    %% Incoming flow & Delivery
-    SocketServer -->|11. Real-time push| RecipientSocket["Recipient Device"]
-    
-    %% Media Flow
-    UI -->|Media Upload| Cloudinary
-    Cloudinary -->|Media URL + Metadata| UI
-    Cloudinary -.->|Download on-demand| FileCache
-```
-
----
-
 ## 🔐 End-to-End Encryption (E2EE) Deep Dive
 
 Whisper implements a zero-knowledge cryptographic model where private keys never leave the user's custody.

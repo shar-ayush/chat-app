@@ -115,6 +115,39 @@ export const getLocalChats = async (): Promise<Chat[]> => {
   });
 };
 
+export const getLocalChatByParticipantId = async (participantId: string): Promise<Chat | null> => {
+  return runWithDb(async (db) => {
+    const row = await db.getFirstAsync<LocalChatRow>(
+      "SELECT * FROM chats WHERE participant_id = ? LIMIT 1",
+      [String(participantId)]
+    );
+
+    if (!row) return null;
+
+    return {
+      _id: row.id,
+      participant: {
+        _id: row.participant_id,
+        name: row.participant_name,
+        email: row.participant_email || "",
+        avatar: row.participant_avatar || "",
+      },
+      lastMessage: row.last_message_id
+        ? {
+            _id: row.last_message_id,
+            text: row.last_message_text || "",
+            sender: row.last_message_sender || "",
+            createdAt: row.last_message_at || new Date().toISOString(),
+          }
+        : null,
+      lastMessageAt: row.last_message_at || new Date().toISOString(),
+      createdAt: row.created_at || new Date().toISOString(),
+      unreadCount: row.unread_count,
+    };
+  });
+};
+
+
 export const updateLocalChatLastMessage = async (
   chatId: string,
   lastMessage: { id: string; text: string; sender: any; createdAt: string },

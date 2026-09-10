@@ -87,9 +87,21 @@ export const initDb = async () => {
       created_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS friends (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      username TEXT,
+      avatar TEXT,
+      email TEXT,
+      public_key TEXT,
+      friendship_id TEXT,
+      since TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_messages_chat_status ON messages(chat_id, status);
     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
     CREATE INDEX IF NOT EXISTS idx_chats_last_message_at ON chats(last_message_at);
+    CREATE INDEX IF NOT EXISTS idx_friends_id ON friends(id);
   `);
 
   // Safety: add new columns on existing tables that may have skipped the migration

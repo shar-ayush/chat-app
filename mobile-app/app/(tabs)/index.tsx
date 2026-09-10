@@ -11,7 +11,7 @@ const ChatsTab = () => {
   const router = useRouter();
   const { data: chats, isLoading, error, refetch } = useChats();
 
-  if (isLoading) {
+  if (isLoading && !chats) {
     return (
       <View className="flex-1 bg-[#F8FAFC] dark:bg-[#0D0D0F] items-center justify-center">
         <ActivityIndicator size={"large"} color={"#007AFF"} />
@@ -19,7 +19,7 @@ const ChatsTab = () => {
     );
   }
 
-  if (error) {
+  if (error && !chats) {
     return (
       <View className="flex-1 bg-[#F8FAFC] dark:bg-[#0D0D0F] items-center justify-center">
         <Text className="text-red-500 text-3xl">Failed to load chats</Text>

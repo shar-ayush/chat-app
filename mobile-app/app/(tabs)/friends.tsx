@@ -257,7 +257,7 @@ const FriendsTab = () => {
       {/* BODY: FRIENDS TAB */}
       {activeTab === "friends" && (
         <View className="flex-1 px-5">
-          {isLoadingFriends || isCreatingChat ? (
+          {(isLoadingFriends && !friends) || isCreatingChat ? (
             <View className="flex-1 items-center justify-center">
               <ActivityIndicator size="large" color="#007AFF" />
             </View>

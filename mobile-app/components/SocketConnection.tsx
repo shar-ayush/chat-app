@@ -14,7 +14,10 @@ const SocketConnection = () => {
   const disconnect = useSocketStore((state) => state.disconnect);
 
   const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
+
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
 
   useEffect(() => {
     if (isSignedIn) {

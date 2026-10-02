@@ -19,9 +19,12 @@
   <img src="https://img.shields.io/badge/Database-SQLite_WAL-003B57?style=flat&logo=sqlite" alt="SQLite WAL" />
 </p>
 
+---
+## Download the Android App 
+
+[Link to Download](https://drive.google.com/file/d/1bypkDdcX1kSzijw7LSuIL17QwXPRPgr6/view?usp=drive_link)
 
 ---
-
 ## 📖 Table of Contents
 
 - [Core Highlights](#-core-highlights)
